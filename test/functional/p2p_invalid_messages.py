@@ -297,9 +297,9 @@ class InvalidMessagesTest(BitcoinTestFramework):
         assert_equal(chaintips[0]['status'], 'headers-only')
         assert_equal(chaintips[0]['hash'], blockheader.hash_hex)
 
-        # invalidate PoW
-        while not blockheader.hash_hex.startswith('f'):
-            blockheader.nNonce += 1
+        # invalidate PoW: regtest's AQ threshold is 0 (every hash qualifies), so
+        # claim an out-of-range threshold instead
+        blockheader.nBits = 961
         with self.nodes[0].assert_debug_log(['Misbehaving', 'header with invalid proof of work']):
             peer.send_without_ping(msg_headers([blockheader]))
             peer.wait_for_disconnect()

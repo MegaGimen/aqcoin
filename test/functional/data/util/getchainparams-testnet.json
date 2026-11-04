@@ -1,25 +1,21 @@
 {
   "chain": "test",
   "test_chain": true,
-  "genesis": "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943",
+  "genesis": "2d799d8cb7af70768fcff59cb138a8edc89faec5e76a1c7f4bcddf65ae1baf0d",
   "subsidy_halving_interval": 210000,
   "pow": {
-    "limit": "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "aq_min_threshold": 560,
+    "aq_init_threshold": 600,
     "target_spacing": 600,
-    "difficulty_retarget_interval": 2016,
-    "mindiff_blocks": "yes"
+    "lwma_window": 60
   },
   "net": {
-    "default_port": 18333,
-    "magic": "0b110907",
+    "default_port": 19433,
+    "magic": "a795a09c",
     "dns_seeds": [
-      "testnet-seed.bitcoin.jonasschnelli.ch.",
-      "seed.tbtc.petertodd.net.",
-      "testnet-seed.bluematt.me.",
-      "seed.testnet.achownodes.xyz."
     ]
   },
   "addresses": {
-    "bech32_hrp": "tb"
+    "bech32_hrp": "taq"
   }
 }

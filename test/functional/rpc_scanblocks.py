@@ -82,30 +82,33 @@ class ScanblocksTest(BitcoinTestFramework):
         assert blockhash in node.scanblocks(
             "start", [{"desc": f"pkh({parent_key}/*)", "range": [0, 100]}], height)['relevant_blocks']
 
-        # check that false-positives are included in the result now; note that
-        # finding a false-positive at runtime would take too long, hence we simply
-        # use a pre-calculated one that collides with the regtest genesis block's
-        # coinbase output and verify that their BIP158 ranged hashes match
-        genesis_blockhash = node.getblockhash(0)
-        genesis_spks = bip158_relevant_scriptpubkeys(node, genesis_blockhash)
-        assert_equal(len(genesis_spks), 1)
-        genesis_coinbase_spk = list(genesis_spks)[0]
-        false_positive_spk = bytes.fromhex("001400000000000000000000000000000000000cadcb")
+        # check that false-positives are included in the result now. AQCoin's
+        # genesis coinbase pays to OP_RETURN, which BIP158 filters exclude, so
+        # use block 1 instead; its hash depends on the test's clock, so the
+        # colliding script is searched for at runtime (about M = 784931 tries).
+        fp_blockhash = node.getblockhash(1)
+        fp_spks = bip158_relevant_scriptpubkeys(node, fp_blockhash)
+        assert_equal(len(fp_spks), 1)
+        fp_coinbase_spk = list(fp_spks)[0]
+        fp_coinbase_hash = bip158_basic_element_hash(fp_coinbase_spk, 1, fp_blockhash)
+        false_positive_spk = None
+        for i in range(20_000_000):
+            candidate = bytes.fromhex("0014") + i.to_bytes(20, "big")
+            if bip158_basic_element_hash(candidate, 1, fp_blockhash) == fp_coinbase_hash:
+                false_positive_spk = candidate
+                break
+        assert false_positive_spk is not None and false_positive_spk != fp_coinbase_spk
 
-        genesis_coinbase_hash = bip158_basic_element_hash(genesis_coinbase_spk, 1, genesis_blockhash)
-        false_positive_hash = bip158_basic_element_hash(false_positive_spk, 1, genesis_blockhash)
-        assert_equal(genesis_coinbase_hash, false_positive_hash)
-
-        assert genesis_blockhash in node.scanblocks(
-            "start", [{"desc": f"raw({genesis_coinbase_spk.hex()})"}], 0, 0)['relevant_blocks']
-        assert genesis_blockhash in node.scanblocks(
-            "start", [{"desc": f"raw({false_positive_spk.hex()})"}], 0, 0)['relevant_blocks']
+        assert fp_blockhash in node.scanblocks(
+            "start", [{"desc": f"raw({fp_coinbase_spk.hex()})"}], 1, 1)['relevant_blocks']
+        assert fp_blockhash in node.scanblocks(
+            "start", [{"desc": f"raw({false_positive_spk.hex()})"}], 1, 1)['relevant_blocks']
 
         # check that the filter_false_positives option works
-        assert genesis_blockhash in node.scanblocks(
-            "start", [{"desc": f"raw({genesis_coinbase_spk.hex()})"}], 0, 0, "basic", {"filter_false_positives": True})['relevant_blocks']
-        assert genesis_blockhash not in node.scanblocks(
-            "start", [{"desc": f"raw({false_positive_spk.hex()})"}], 0, 0, "basic", {"filter_false_positives": True})['relevant_blocks']
+        assert fp_blockhash in node.scanblocks(
+            "start", [{"desc": f"raw({fp_coinbase_spk.hex()})"}], 1, 1, "basic", {"filter_false_positives": True})['relevant_blocks']
+        assert fp_blockhash not in node.scanblocks(
+            "start", [{"desc": f"raw({false_positive_spk.hex()})"}], 1, 1, "basic", {"filter_false_positives": True})['relevant_blocks']
 
         # test node with disabled blockfilterindex
         assert_raises_rpc_error(-1, "Index is not enabled for filtertype basic",

@@ -1,19 +1,20 @@
 {
   "chain": "regtest",
   "test_chain": true,
-  "genesis": "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206",
+  "genesis": "87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da",
   "subsidy_halving_interval": 150,
   "pow": {
-    "limit": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    "aq_min_threshold": 0,
+    "aq_init_threshold": 0
   },
   "net": {
-    "default_port": 18444,
-    "magic": "fabfb5da",
+    "default_port": 19544,
+    "magic": "b6b1a4fd",
     "dns_seeds": [
       "dummySeed.invalid."
     ]
   },
   "addresses": {
-    "bech32_hrp": "bcrt"
+    "bech32_hrp": "aqrt"
   }
 }

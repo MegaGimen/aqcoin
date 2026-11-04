@@ -171,16 +171,16 @@ class GetblockstatsTest(BitcoinTestFramework):
         genesis_stats = self.nodes[0].getblockstats(0)
         assert_equal(genesis_stats["blockhash"], "87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da")
         assert_equal(genesis_stats["utxo_increase"], 1)
-        assert_equal(genesis_stats["utxo_size_inc"], 116)
+        assert_equal(genesis_stats["utxo_size_inc"], 50)  # genesis pays to a 1-byte OP_RETURN script
         assert_equal(genesis_stats["utxo_increase_actual"], 0)
         assert_equal(genesis_stats["utxo_size_inc_actual"], 0)
 
         self.log.info('Test tip including OP_RETURN')
         tip_stats = self.nodes[0].getblockstats(tip)
         assert_equal(tip_stats["utxo_increase"], 6)
-        assert_equal(tip_stats["utxo_size_inc"], 435)
+        assert_equal(tip_stats["utxo_size_inc"], 444)
         assert_equal(tip_stats["utxo_increase_actual"], 4)
-        assert_equal(tip_stats["utxo_size_inc_actual"], 296)
+        assert_equal(tip_stats["utxo_size_inc_actual"], 305)
 
         self.log.info("Test when only header is known")
         block = self.generateblock(self.nodes[0], output="raw(55)", transactions=[], submit=False)
