@@ -312,9 +312,11 @@ public:
 
         ApplyDeploymentOptions(opts.dep_opts);
 
-        genesis = CreateGenesisBlock(1793750400, 0, 0, 1, 50 * COIN);
+        // Same timestamp as Bitcoin's regtest genesis, so that test setups
+        // with mocked clocks start in initial block download.
+        genesis = CreateGenesisBlock(1296688602, 0, 0, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256{"bf471e6576769e70d126e6f1e10ea1bcd5901e097a68f3534d048e0af78c28f8"});
+        assert(consensus.hashGenesisBlock == uint256{"87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da"});
         assert(genesis.hashMerkleRoot == uint256{"14422ccf3563ebcf13e74abf0e7f373d4e716448af332587fe1308f5c8764cea"});
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.

@@ -57,7 +57,11 @@ using node::BlockAssembler;
 using node::BlockCreateOptions;
 
 namespace miner_tests {
+// AQCoin: mine on regtest (AQ threshold 0). Bitcoin used mainnet with
+// hardcoded nonces for difficulty 1; mainnet's x_init = 700 needs ~2e9 hashes
+// per block, so BLOCKINFO nonces are not meaningful here.
 struct MinerTestingSetup : public TestingSetup {
+    MinerTestingSetup() : TestingSetup{ChainType::REGTEST} {}
     void TestPackageSelection(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestBasicMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst, int baseheight) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestPrioritisedMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
@@ -864,7 +868,10 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 
         {
             // A block template does not have proof-of-work, but it might pass
-            // verification by coincidence. Grind the nonce if needed:
+            // verification by coincidence. On regtest (AQ threshold 0) every
+            // hash passes, so demand the maximum threshold instead; then grind
+            // the nonce if needed:
+            block.nBits = AQ_MAX_THRESHOLD;
             while (CheckProofOfWork(block.GetHash(), block.nBits, Assert(m_node.chainman)->GetParams().GetConsensus())) {
                 block.nNonce++;
             }

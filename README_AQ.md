@@ -37,9 +37,10 @@ x 每加 1，难度在 600 附近约乘 1.10，在 700 附近约乘 1.21，在 8
 | Bech32 前缀 | `aq` | `taq` | `aqrt` |
 | Base58 P2PKH / P2SH / WIF | 23 (`A`) / 83 (`a`) / 151 | 66 (`T`) / 127 (`t`) / 194 | 同测试网 |
 | x_min / x_init | 560 / 700 | 560 / 600 | 0 / 0（不调整） |
-| 创世区块哈希 | `b5c0d4ce…6ae2dfcd` | `2d799d8c…ae1baf0d` | `bf471e65…f78c28f8` |
+| 创世区块哈希 | `b5c0d4ce…6ae2dfcd` | `2d799d8c…ae1baf0d` | `87b3ee6d…9770e8da` |
 
-所有创世区块：时间 `1793750400`（2026-11-04 00:00 UTC），coinbase 留言
+主网和测试网创世区块时间为 `1793750400`（2026-11-04 00:00 UTC），regtest 沿用比特币 regtest 的
+`1296688602`（便于测试中的模拟时钟）。所有创世区块的 coinbase 留言为
 `Nothing human makes it out of the near-future`，奖励 50 AQC 付给 `OP_RETURN`（不可花费）。
 主网 nonce 为 `776123727`（AQ = 702 ≥ 700），测试网 nonce 为 `516`（AQ = 605 ≥ 600）。
 可用 `contrib/aq/genesis.py` 加 `aq-genesis-grind` 重新生成或校验。
