@@ -118,6 +118,7 @@ import json
 import hashlib
 import os
 import random
+import time
 
 # Whether or not to output generated test vectors, in JSON format.
 GEN_TEST_VECTORS = False
@@ -1433,6 +1434,9 @@ class TaprootTest(BitcoinTestFramework):
 
         coinbase_tx = create_coinbase(self.lastblockheight + 1, pubkey=cb_pubkey, extra_output_script=extra_output_script, fees=fees)
         block = create_block(self.tip, coinbase_tx, ntime=self.lastblocktime + 1, txlist=txs)
+        # Thousands of blocks 1 second apart run ahead of the clock; keep them
+        # within AQCoin's 30-minute MAX_FUTURE_BLOCK_TIME by moving mocktime along.
+        node.setmocktime(max(int(time.time()), self.lastblocktime + 1))
         witness and add_witness_commitment(block)
         block.solve()
         block_response = node.submitblock(block.serialize().hex())

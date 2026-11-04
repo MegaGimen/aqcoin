@@ -5,7 +5,6 @@
 
 import time
 
-from test_framework.blocktools import MAX_FUTURE_BLOCK_TIME
 from test_framework.descriptors import descsum_create
 from test_framework.messages import (
     COutPoint,
@@ -23,6 +22,9 @@ from test_framework.util import (
     assert_raises_rpc_error,
 )
 from test_framework.wallet import MiniWallet
+
+TIMESTAMP_WINDOW = 2 * 60 * 60
+
 
 class WalletAnchorTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -52,7 +54,8 @@ class WalletAnchorTest(BitcoinTestFramework):
         self.generateblock(self.nodes[0], sender.get_address(), [anchor_spend.serialize().hex()])
 
         # Mock time forward and generate some blocks to avoid rescanning of latest blocks
-        self.nodes[0].setmocktime(int(time.time()) + MAX_FUTURE_BLOCK_TIME + 1)
+        # (beyond the wallet's 2-hour rescan grace window, TIMESTAMP_WINDOW)
+        self.nodes[0].setmocktime(int(time.time()) + TIMESTAMP_WINDOW + 1)
         self.generate(self.nodes[0], 10)
 
         self.nodes[0].createwallet(wallet_name="anchor", disable_private_keys=True)

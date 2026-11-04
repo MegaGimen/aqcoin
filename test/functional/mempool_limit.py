@@ -206,7 +206,8 @@ class MempoolLimitTest(BitcoinTestFramework):
         self.log.info('Check that mempoolminfee is minrelaytxfee')
         assert_equal(node.getmempoolinfo()['minrelaytxfee'], node.getmempoolinfo()["mempoolminfee"])
 
-        node.setmocktime(int(time.time())-3600)
+        # (stay within MAX_FUTURE_BLOCK_TIME = 30 minutes of the existing blocks)
+        node.setmocktime(int(time.time()) - 20 * 60)
         fill_mempool(self, node)
         node.setmocktime(0) # bump time forward so the rate limit buckets refresh and don't block broadcast
 

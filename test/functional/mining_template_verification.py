@@ -25,7 +25,6 @@ from test_framework.util import (
 
 from test_framework.messages import (
     BLOCK_HEADER_SIZE,
-    uint256_from_compact,
 )
 
 from test_framework.wallet import (
@@ -121,12 +120,12 @@ class MiningTemplateVerificationTest(BitcoinTestFramework):
     def nbits_test(self, node, block):
         self.log.info("Extremely high nBits")
         bad_block = copy.deepcopy(block)
-        bad_block.nBits = 469762303  # impossible in the real world
+        bad_block.nBits = 960  # maximum AQ threshold, practically unsolvable
         assert_template(node, bad_block, "bad-diffbits", solve=False, expect_submit="high-hash")
 
-        self.log.info("Lowering nBits should make the block invalid")
+        self.log.info("Changing nBits should make the block invalid")
         bad_block = copy.deepcopy(block)
-        bad_block.nBits -= 1
+        bad_block.nBits += 1  # regtest's threshold is 0, so raise it
         assert_template(node, bad_block, "bad-diffbits")
 
     def merkle_root_test(self, node, block):
@@ -154,11 +153,8 @@ class MiningTemplateVerificationTest(BitcoinTestFramework):
     def pow_test(self, node, block):
         '''Modifies block with the generated PoW'''
         self.log.info("Generate a block")
-        target = uint256_from_compact(block.nBits)
-        # Ensure that it doesn't meet the target by coincidence
-        while block.hash_int <= target:
-            block.nNonce += 1
-        self.log.debug("Found a nonce")
+        # Regtest's AQ threshold is 0, so every hash meets it; the template
+        # check must accept the block either way.
 
         self.log.info("A block template doesn't need PoW")
         assert_template(node, block, None)

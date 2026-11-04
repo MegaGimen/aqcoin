@@ -264,7 +264,7 @@ class BIP68Test(BitcoinTestFramework):
         self.nodes[0].prioritisetransaction(txid=tx2.txid_hex, fee_delta=int(-self.relayfee*COIN))
         cur_time = int(time.time())
         for _ in range(10):
-            self.nodes[0].setmocktime(cur_time + 600)
+            self.set_all_mocktime(cur_time + 600)
             self.generate(self.wallet, 1, sync_fun=self.no_op)
             cur_time += 600
 
@@ -277,7 +277,7 @@ class BIP68Test(BitcoinTestFramework):
         self.nodes[0].prioritisetransaction(txid=tx2.txid_hex, fee_delta=int(self.relayfee*COIN))
 
         # Advance the time on the node so that we can test timelocks
-        self.nodes[0].setmocktime(cur_time+600)
+        self.set_all_mocktime(cur_time+600)
         # Save block template now to use for the reorg later
         tmpl = self.nodes[0].getblocktemplate(NORMAL_GBT_REQUEST_PARAMS)
         self.generate(self.nodes[0], 1)
@@ -338,7 +338,7 @@ class BIP68Test(BitcoinTestFramework):
         assert tx2.txid_hex in mempool
 
         # Reset the chain and get rid of the mocktimed-blocks
-        self.nodes[0].setmocktime(0)
+        self.set_all_mocktime(0)
         self.nodes[0].invalidateblock(self.nodes[0].getblockhash(cur_height+1))
         self.generate(self.wallet, 10, sync_fun=self.no_op)
 
@@ -346,6 +346,12 @@ class BIP68Test(BitcoinTestFramework):
     # activation height.  If more blocks are mined prior to this test
     # being run, then it's possible the test has activated the soft fork, and
     # this test should be moved to run earlier, or deleted.
+    def set_all_mocktime(self, t):
+        # AQCoin rejects blocks more than 30 minutes ahead of a node's clock,
+        # so move every node's clock, not just the miner's.
+        for node in self.nodes:
+            node.setmocktime(t)
+
     def test_bip68_not_consensus(self):
         assert not softfork_active(self.nodes[0], 'csv')
 

@@ -26,7 +26,7 @@ from test_framework.util import (
 )
 
 # 2 hashes required per regtest block (with no difficulty adjustment)
-REGTEST_WORK_PER_BLOCK = 2
+REGTEST_WORK_PER_BLOCK = 1  # work(0) on AQCoin regtest
 
 class MinimumChainWorkTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -57,7 +57,8 @@ class MinimumChainWorkTest(BitcoinTestFramework):
 
         starting_blockcount = self.nodes[2].getblockcount()
 
-        num_blocks_to_generate = int((self.node_min_work[1] - starting_chain_work) / REGTEST_WORK_PER_BLOCK)
+        # Stay strictly below node1's minimum chain work.
+        num_blocks_to_generate = int((self.node_min_work[1] - 1 - starting_chain_work) / REGTEST_WORK_PER_BLOCK)
         self.log.info(f"Generating {num_blocks_to_generate} blocks on node0")
         hashes = self.generate(self.nodes[0], num_blocks_to_generate, sync_fun=self.no_op)
 

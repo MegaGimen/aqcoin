@@ -35,7 +35,8 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 4
         # Node0 has no required chainwork; node1 requires 15 blocks on top of the genesis block; node2 requires 2047
-        self.extra_args = [["-minimumchainwork=0x0", "-checkblockindex=0"], ["-minimumchainwork=0x1f", "-checkblockindex=0"], ["-minimumchainwork=0x1000", "-checkblockindex=0"], ["-minimumchainwork=0x1000", "-checkblockindex=0", "-whitelist=noban@127.0.0.1"]]
+        # (each AQCoin regtest block, including genesis, has work(0) = 1)
+        self.extra_args = [["-minimumchainwork=0x0", "-checkblockindex=0"], ["-minimumchainwork=0x10", "-checkblockindex=0"], ["-minimumchainwork=0x800", "-checkblockindex=0"], ["-minimumchainwork=0x800", "-checkblockindex=0", "-whitelist=noban@127.0.0.1"]]
 
     def setup_network(self):
         self.setup_nodes()
@@ -85,7 +86,7 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
             assert_equal(len(chaintips), 1)
             assert {
                 'height': 0,
-                'hash': '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206',
+                'hash': '87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da',
                 'branchlen': 0,
                 'status': 'active',
             } in chaintips
@@ -100,7 +101,7 @@ class RejectLowDifficultyHeadersTest(BitcoinTestFramework):
 
         assert {
             'height': 0,
-            'hash': '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206',
+            'hash': '87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da',
             'branchlen': 0,
             'status': 'active',
         } in self.nodes[2].getchaintips()

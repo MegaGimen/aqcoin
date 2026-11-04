@@ -24,7 +24,6 @@ from test_framework.messages import (
     CTxOut,
     MAX_BLOCK_WEIGHT,
     SEQUENCE_FINAL,
-    uint256_from_compact,
     uint256_from_str,
 )
 from test_framework.p2p import P2PDataStore
@@ -662,13 +661,12 @@ class FullBlockTest(BitcoinTestFramework):
         self.log.info("Reject a block with invalid work")
         self.move_tip(44)
         b47 = self.next_block(47)
-        target = uint256_from_compact(b47.nBits)
-        while b47.hash_int <= target:
-            # Rehash nonces until an invalid too-high-hash block is found.
-            b47.nNonce += 1
+        # Regtest's AQ threshold is 0 (every hash qualifies), so claim an
+        # out-of-range threshold, which fails the proof-of-work check.
+        b47.nBits = 961
         self.send_blocks([b47], False, force_send=True, reject_reason='high-hash', reconnect=True)
 
-        self.log.info("Reject a block with a timestamp >2 hours in the future")
+        self.log.info("Reject a block with a timestamp >30 minutes in the future")
         self.move_tip(44)
         b48 = self.next_block(48)
         b48.nTime = int(time.time()) + 60 * 60 * 3
@@ -686,7 +684,7 @@ class FullBlockTest(BitcoinTestFramework):
         self.log.info("Reject a block with incorrect POW limit")
         self.move_tip(44)
         b50 = self.next_block(50)
-        b50.nBits = b50.nBits - 1
+        b50.nBits = b50.nBits + 1
         b50.solve()
         self.send_blocks([b50], False, force_send=True, reject_reason='bad-diffbits', reconnect=True)
 
@@ -727,14 +725,15 @@ class FullBlockTest(BitcoinTestFramework):
         self.send_blocks([b55], True)
         self.save_spendable_output()
 
-        # The block which was previously rejected because of being "too far(3 hours)" must be accepted 2 hours later.
-        # The new block is only 1 hour into future now and we must reorg onto to the new longer chain.
+        # The block which was previously rejected because of being "too far(3 hours)" must be accepted later.
+        # After moving the clock 2h50m forward, the block is only 10 minutes into the future (below the
+        # 30-minute limit) and we must reorg onto the new longer chain.
         # The new bestblock b48p is invalidated manually.
         #  -> b31 (8) -> b33 (9) -> b35 (10) -> b39 (11) -> b42 (12) -> b43 (13) -> b53 (14) -> b55 (15)
         #                                                                                   \-> b54 (15)
         #                                                                        -> b44 (14)\-> b48 () -> b48p ()
         self.log.info("Accept a previously rejected future block at a later time")
-        node.setmocktime(int(time.time()) + 2*60*60)
+        node.setmocktime(int(time.time()) + 3*60*60 - 10*60)
         self.move_tip(48)
         self.block_heights[b48.hash_int] = self.block_heights[b44.hash_int] + 1 # b48 is a parent of b44
         b48p = self.next_block("48p")

@@ -15,7 +15,7 @@ INVALID_DATA = [
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # Invalid hrp
         [],
     ),
-    ("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5", "Invalid Bech32 checksum", [41]),
+    ("aq1qw508d6qejxtdg4y5r3zarvary0c5xw7kehnc68", "Invalid Bech32 checksum", [41]),
     (
         "AQ13W508D6QEJXTDG4Y5R3ZARVARY0C5XW7KX948CE",
         "Version 1+ witness address must use Bech32m checksum",
@@ -42,9 +42,9 @@ INVALID_DATA = [
         [],
     ),
     (
-        "aq1qw508d6qejxtdg4y5r3zarvary0c5xw7kehnc6x",
+        "AQ1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KEHNc6X",
         "Invalid character or mixed case",  # bc1, Mixed case, not in BIP 173 test vectors
-        [40],
+        [39],
     ),
     (
         "aq1zw508d6qejxtdg4y5r3zarvaryvqmz8jcy",
@@ -89,7 +89,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "bc1p38j9r5y49hruaue7wxjce0updqjuyyx0kh56v8s25huc6995vvpql3jow4",
+        "aq1p38j9r5y49hruaue7wxjce0updqjuyyx0kh56v8s25huc6995vvpql3jow4",
         "Invalid Base 32 character",  # Invalid character in checksum
         [59],
     ),
@@ -110,7 +110,7 @@ INVALID_DATA = [
         [],
     ),
     (
-        "taq1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqjrg2ea",
+        "taq1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqjrG2ea",
         "Invalid or unsupported Segwit (Bech32) or Base58 encoding.",  # tb1, Mixed case
         [],
     ),

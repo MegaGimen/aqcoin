@@ -89,13 +89,12 @@ CTxDestination DecodeDestination(const std::string& str, const CChainParams& par
     error_str = "";
 
     // AQCoin: base58 addresses can start with the bech32 HRP (mainnet P2SH
-    // addresses start with 'a', the mainnet HRP is "aq"), so a string is only
-    // treated as Bech32 if it is not a valid Base58Check string and starts
-    // with "<hrp>1" (case-insensitive).
+    // addresses start with 'a', the mainnet HRP is "aq"), so a valid
+    // Base58Check string is always decoded as Base58, and only other strings
+    // starting with the HRP (case-insensitive) are treated as Bech32.
     // Note this will be false if it is a valid Bech32 address for a different network
     const bool is_base58 = DecodeBase58Check(str, data, 21);
-    const std::string hrp_sep{params.Bech32HRP() + "1"};
-    bool is_bech32 = !is_base58 && (ToLower(str.substr(0, hrp_sep.size())) == hrp_sep);
+    bool is_bech32 = !is_base58 && (ToLower(str.substr(0, params.Bech32HRP().size())) == params.Bech32HRP());
 
     if (!is_bech32 && is_base58) {
         // base58-encoded Bitcoin addresses.

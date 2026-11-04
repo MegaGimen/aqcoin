@@ -372,7 +372,9 @@ class HTTPBasicsTest (BitcoinTestFramework):
             headers=headers_chunked,
             encode_chunked=True)
         response1 = conn.recv_raw()
-        assert b'{"result":"high-hash","error":null}\n' in response1
+        # The all-zero header has nBits = 0, which is a valid AQ threshold on
+        # regtest, so the block fails later than the proof-of-work check.
+        assert b'{"result":"bad-blk-length","error":null}\n' in response1
 
         self.log.info("Check excessive size HTTP request encoded with chunked transfer")
         conn = BitcoinHTTPConnection(self.node)
@@ -714,7 +716,7 @@ class HTTPBasicsTest (BitcoinTestFramework):
 
             # The waiting connection gets processed
             delayed_response = waiting_request.result(timeout=5)
-            assert "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206" in delayed_response.decode()
+            assert "87b3ee6db37d1b619642c99d32e7b0ef804eb16bd3b3853bcb596c829770e8da" in delayed_response.decode()
 
             # Close all remaining connections for clean up
             for client in connections:

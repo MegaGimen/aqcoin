@@ -438,12 +438,14 @@ class MiningTest(BitcoinTestFramework):
         assert_equal(mining_info['bits'], nbits_str(REGTEST_N_BITS))
         assert_equal(mining_info['target'], target_str(REGTEST_TARGET))
         # We don't care about precision, round to avoid mismatch under Valgrind:
-        assert_equal(round(mining_info['difficulty'], 10), Decimal('0.0000000005'))
+        assert_equal(mining_info['difficulty'], 1)  # work(0) / work(x_min = 0)
+        assert_equal(mining_info['aq_threshold'], REGTEST_N_BITS)
         assert_equal(mining_info['next']['height'], 201)
         assert_equal(mining_info['next']['target'], target_str(REGTEST_TARGET))
         assert_equal(mining_info['next']['bits'], nbits_str(REGTEST_N_BITS))
-        assert_equal(round(mining_info['next']['difficulty'], 10), Decimal('0.0000000005'))
-        assert_equal(round(mining_info['networkhashps'], 5), Decimal('0.00333'))
+        assert_equal(mining_info['next']['difficulty'], 1)
+        assert_equal(mining_info['next']['aq_threshold'], REGTEST_N_BITS)
+        assert_equal(round(mining_info['networkhashps'], 5), Decimal('0.00167'))  # work(0) = 1 per block
         assert_equal(mining_info['pooledtx'], 0)
 
         self.log.info("getblocktemplate: Test default witness commitment")
@@ -491,7 +493,9 @@ class MiningTest(BitcoinTestFramework):
         assert_raises_rpc_error(-22, "Block decode failed", node.submitblock, block.serialize()[:-15].hex())
 
         self.log.info("submitblock: Test empty block")
-        assert_equal('high-hash', node.submitblock(hexdata=CBlock().serialize().hex()))
+        # An all-zero header has nBits = 0, a valid AQ threshold on regtest,
+        # so the empty block fails after the proof-of-work check.
+        assert_equal('bad-blk-length', node.submitblock(hexdata=CBlock().serialize().hex()))
 
         self.log.info('submitheader tests')
         assert_raises_rpc_error(-22, 'Block header decode failed', lambda: node.submitheader(hexdata='xx' * BLOCK_HEADER_SIZE))
@@ -563,8 +567,11 @@ class MiningTest(BitcoinTestFramework):
         self.test_fees_and_sigops()
         self.test_blockmintxfee_parameter()
         self.test_block_max_weight()
-        self.test_timewarp()
-        self.test_murch_zawy_mintime()
+        # AQCoin retargets every block with LWMA; the BIP94 timewarp and BIP54
+        # Murch-Zawy period-boundary rules (test_timewarp, test_murch_zawy_mintime)
+        # do not exist, so those checks are not run. (test_timewarp used to
+        # restart the node that test_block_max_weight leaves stopped.)
+        self.start_node(0)
         self.test_pruning()
         self.test_height_in_locktime()
 

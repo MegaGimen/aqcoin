@@ -136,6 +136,7 @@ class BlockchainTest(BitcoinTestFramework):
         self.log.info("Test getblockchaininfo")
 
         keys = [
+            'aq_threshold',
             'bestblockhash',
             'bits',
             'blocks',
@@ -461,12 +462,13 @@ class BlockchainTest(BitcoinTestFramework):
         assert_is_hash_string(header['merkleroot'])
         assert_equal(header['bits'], nbits_str(REGTEST_N_BITS))
         assert_equal(header['target'], target_str(REGTEST_TARGET))
+        assert_equal(header['aq_threshold'], REGTEST_N_BITS)
         assert isinstance(header['time'], int)
         assert_equal(header['mediantime'], TIME_RANGE_MTP)
         assert isinstance(header['nonce'], int)
         assert isinstance(header['version'], int)
         assert isinstance(int(header['versionHex'], 16), int)
-        assert isinstance(header['difficulty'], Decimal)
+        assert isinstance(header['difficulty'], (Decimal, int))  # exactly 1 on regtest
 
         # Test with verbose=False, which should return the header as hex.
         header_hex = node.getblockheader(blockhash=besthash, verbose=False)
@@ -481,9 +483,8 @@ class BlockchainTest(BitcoinTestFramework):
     def _test_getdifficulty(self):
         self.log.info("Test getdifficulty")
         difficulty = self.nodes[0].getdifficulty()
-        # 1 hash in 2 should be valid, so difficulty should be 1/2**31
-        # binary => decimal => binary math is why we do this check
-        assert abs(difficulty * 2**31 - 1) < 0.0001
+        # Regtest: threshold 0 = x_min, so difficulty = work(0) / work(0) = 1
+        assert_equal(difficulty, 1)
 
     def _test_getnetworkhashps(self):
         self.log.info("Test getnetworkhashps")
@@ -523,9 +524,9 @@ class BlockchainTest(BitcoinTestFramework):
         hashes_per_second = self.nodes[0].getnetworkhashps(100, 0)
         assert_equal(hashes_per_second, 0)
 
-        # This should be 2 hashes every 10 minutes or 1/300
+        # This should be work(0) = 1 hash every 10 minutes or 1/600
         hashes_per_second = self.nodes[0].getnetworkhashps()
-        assert abs(hashes_per_second * 300 - 1) < 0.0001
+        assert abs(hashes_per_second * 600 - 1) < 0.0001
 
         # Test setting the first param of getnetworkhashps to -1 returns the average network
         # hashes per second from the last difficulty change.
@@ -537,7 +538,7 @@ class BlockchainTest(BitcoinTestFramework):
 
         # Ensure long lookups get truncated to chain length
         hashes_per_second = self.nodes[0].getnetworkhashps(self.nodes[0].getblockcount() + 1000)
-        assert hashes_per_second > 0.003
+        assert hashes_per_second > 0.0015
 
     def _test_stopatheight(self):
         self.log.info("Test stopping at height")
