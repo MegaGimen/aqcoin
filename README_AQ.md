@@ -115,8 +115,10 @@ build/bin/aqminer -benchmark=20 -threads=4                              # 只测
 
 ## 种子节点
 
-DNS 种子已清空。主网固定种子（`src/chainparamsseeds.h`）要在种子服务器的公网地址确定后
-用 `contrib/seeds/` 的工具生成；在此之前，新节点需要用 `-addnode=<host>:9433` 手动连接。
+DNS 种子已清空。`src/chainparamsseeds.h` 仍是上游的比特币节点列表，所以主网暂不使用固定种子。
+种子服务器的公网地址确定后，用 `contrib/seeds/` 的工具重新生成该文件，并恢复
+`src/kernel/chainparams.cpp` 中被注释掉的 `vFixedSeeds` 那一行。在此之前，新节点需要用
+`-addnode=<host>:9433` 手动连接。
 
 ## 与比特币的代码差异
 

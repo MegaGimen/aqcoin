@@ -159,7 +159,7 @@ public:
         assert(consensus.hashGenesisBlock == uint256{"b5c0d4ceef2efaf7bcee79dfedddaba4dee5bfbed1b89d9d6dde9def6ae2dfcd"});
         assert(genesis.hashMerkleRoot == uint256{"14422ccf3563ebcf13e74abf0e7f373d4e716448af332587fe1308f5c8764cea"});
 
-        // No DNS seeds. Fixed seeds are set in chainparamsseeds.h.
+        // No DNS seeds (see the fixed seeds note below).
         vSeeds.clear();
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,23);  // 'A'
@@ -170,7 +170,11 @@ public:
 
         bech32_hrp = "aq";
 
-        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
+        // src/chainparamsseeds.h still holds Bitcoin's seed nodes; do not use
+        // them. Regenerate it with contrib/seeds/ for the AQCoin seed
+        // server(s) and restore the line below before launch:
+        // vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
+        vFixedSeeds.clear();
 
         fDefaultConsistencyChecks = false;
         m_is_mockable_chain = false;

@@ -58,7 +58,11 @@ void Log(const char* fmt, Args... args)
     static std::mutex mu;
     std::lock_guard<std::mutex> lock(mu);
     std::fprintf(stdout, "%s ", Timestamp().c_str());
-    std::fprintf(stdout, fmt, args...);
+    if constexpr (sizeof...(args) == 0) {
+        std::fputs(fmt, stdout);
+    } else {
+        std::fprintf(stdout, fmt, args...);
+    }
     std::fprintf(stdout, "\n");
     std::fflush(stdout);
 }
@@ -471,7 +475,10 @@ public:
         auto last_template = last_stats;
         uint64_t last_hashes = 0;
         while (!m_quit) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(m_opts.poll_ms));
+            // Sleep up to poll_ms, but wake early when a worker submitted a block.
+            for (int waited = 0; waited < m_opts.poll_ms && !m_need_refresh; waited += 20) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
             const auto now = std::chrono::steady_clock::now();
             try {
                 const std::string best = m_rpc.Call("getbestblockhash", UniValue(UniValue::VARR)).get_str();
@@ -581,6 +588,11 @@ private:
                 aqminer::HashTail(mid, header.data() + 64, hash);
             }
             Submit(bt, header, cb, hash);
+            // Don't keep mining on a template whose block was just submitted:
+            // wait (briefly) for the main loop to fetch the next one.
+            for (int i = 0; i < 250 && m_generation.load() == bt.id && !m_quit; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
         }
     }
 
