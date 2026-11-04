@@ -54,40 +54,25 @@
 
 namespace node {
 
-int64_t GetMinimumTime(const CBlockIndex* pindexPrev, const int64_t difficulty_adjustment_interval)
+int64_t GetMinimumTime(const CBlockIndex* pindexPrev)
 {
-    int64_t min_time{pindexPrev->GetMedianTimePast() + 1};
-    // Height of block to be mined.
-    const int height{pindexPrev->nHeight + 1};
-    // Account for BIP94 timewarp rule on all networks. This makes future
-    // activation safer.
-    if (height % difficulty_adjustment_interval == 0) {
-        min_time = std::max<int64_t>(min_time, pindexPrev->GetBlockTime() - MAX_TIMEWARP);
-    }
-    // Account for the BIP54 Murch-Zawy rule on all networks: the last block of
-    // a difficulty adjustment period may not be earlier than its first block.
-    if (height % difficulty_adjustment_interval == difficulty_adjustment_interval - 1) {
-        const int first_height{height - static_cast<int>(difficulty_adjustment_interval) + 1};
-        const CBlockIndex* first_block{Assert(pindexPrev->GetAncestor(first_height))};
-        min_time = std::max<int64_t>(min_time, first_block->GetBlockTime());
-    }
-    return min_time;
+    // AQCoin retargets every block (LWMA with clamped solve times), so the
+    // BIP94/BIP54 period-boundary timestamp rules do not apply.
+    return pindexPrev->GetMedianTimePast() + 1;
 }
 
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
     int64_t nOldTime = pblock->nTime;
-    int64_t nNewTime{std::max<int64_t>(GetMinimumTime(pindexPrev, consensusParams.DifficultyAdjustmentInterval()),
+    int64_t nNewTime{std::max<int64_t>(GetMinimumTime(pindexPrev),
                                        TicksSinceEpoch<std::chrono::seconds>(NodeClock::now()))};
 
     if (nOldTime < nNewTime) {
         pblock->nTime = nNewTime;
     }
 
-    // Updating time can change work required on testnet:
-    if (consensusParams.fPowAllowMinDifficultyBlocks) {
-        pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
-    }
+    // The AQ threshold only depends on previous blocks, so updating the
+    // time never changes the work required.
 
     return nNewTime - nOldTime;
 }
@@ -458,7 +443,6 @@ std::unique_ptr<CBlockTemplate> WaitAndCreateNewBlock(ChainstateManager& chainma
     auto now{NodeClock::now()};
     const auto deadline = now + wait_options.timeout;
     const MillisecondsDouble tick{1000};
-    const bool allow_min_difficulty{chainman.GetParams().GetConsensus().fPowAllowMinDifficultyBlocks};
 
     do {
         bool tip_changed{false};
@@ -488,13 +472,6 @@ std::unique_ptr<CBlockTemplate> WaitAndCreateNewBlock(ChainstateManager& chainma
         LOCK(::cs_main);
 
         // On test networks return a minimum difficulty block after 20 minutes
-        if (!tip_changed && allow_min_difficulty) {
-            const NodeClock::time_point tip_time{std::chrono::seconds{chainman.ActiveChain().Tip()->GetBlockTime()}};
-            if (now > tip_time + 20min) {
-                tip_changed = true;
-            }
-        }
-
         /**
          * We determine if fees increased compared to the previous template by generating
          * a fresh template. There may be more efficient ways to determine how much

@@ -12,6 +12,7 @@
 #include <crypto/chacha20.h>
 #include <crypto/chacha20poly1305.h>
 #include <key.h>
+#include <kernel/messagestartchars.h>
 #include <pubkey.h>
 #include <span.h>
 
@@ -62,6 +63,11 @@ public:
      * and decryption can be tested without knowing the other side's private key.
      */
     void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt = false) noexcept;
+
+    /** Like Initialize(), but derive the salt from the given network magic instead of
+     *  Params().MessageStart(). Used to check the BIP324 test vectors, which are
+     *  defined for Bitcoin's mainnet magic (testing only). */
+    void Initialize(const EllSwiftPubKey& their_pubkey, bool initiator, bool self_decrypt, const MessageStartChars& magic) noexcept;
 
     /** Determine whether this cipher is fully initialized. */
     explicit operator bool() const noexcept { return m_send_l_cipher.has_value(); }

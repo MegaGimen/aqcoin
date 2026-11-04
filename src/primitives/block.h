@@ -53,7 +53,9 @@ public:
 
     bool IsNull() const
     {
-        return (nBits == 0);
+        // nBits == 0 is a valid AQ threshold (regtest), so it cannot mark an
+        // empty header on its own. A real block always has a non-zero time.
+        return nBits == 0 && nTime == 0 && hashMerkleRoot.IsNull();
     }
 
     uint256 GetHash() const;

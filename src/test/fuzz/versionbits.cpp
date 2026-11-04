@@ -66,7 +66,7 @@ public:
         CBlockHeader header;
         header.nVersion = signal ? m_signal : m_no_signal;
         header.nTime = m_start_time + m_blocks.size() * m_interval;
-        header.nBits = 0x1d00ffff;
+        header.nBits = 560; // mainnet AQ minimum threshold
 
         auto current_block = std::make_unique<CBlockIndex>(header);
         current_block->pprev = tip();

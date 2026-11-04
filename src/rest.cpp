@@ -286,7 +286,7 @@ static bool rest_headers(const std::any& context,
     case RESTResponseFormat::JSON: {
         UniValue jsonHeaders(UniValue::VARR);
         for (const CBlockIndex *pindex : headers) {
-            jsonHeaders.push_back(blockheaderToJSON(*tip, *pindex, chainman.GetConsensus().powLimit));
+            jsonHeaders.push_back(blockheaderToJSON(*tip, *pindex, chainman.GetConsensus().nAQMinThreshold));
         }
         std::string strJSON = jsonHeaders.write() + "\n";
         req->WriteHeader("Cache-Control", REST_CACHE_NO_STORE);
@@ -485,7 +485,7 @@ static bool rest_block(const std::any& context,
         if (tx_verbosity) {
             CBlock block{};
             SpanReader{*block_data} >> TX_WITH_WITNESS(block);
-            UniValue objBlock = blockToJSON(chainman.m_blockman, block, *tip, *pblockindex, *tx_verbosity, chainman.GetConsensus().powLimit);
+            UniValue objBlock = blockToJSON(chainman.m_blockman, block, *tip, *pblockindex, *tx_verbosity, chainman.GetConsensus().nAQMinThreshold);
             std::string strJSON = objBlock.write() + "\n";
             req->WriteHeader("Cache-Control", REST_CACHE_NO_STORE);
             req->WriteHeader("Content-Type", "application/json");

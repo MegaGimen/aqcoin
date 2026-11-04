@@ -26,15 +26,17 @@
  * Maximum amount of time that a block timestamp is allowed to exceed the
  * current time before the block will be accepted.
  */
-inline constexpr int64_t MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60;
+inline constexpr int64_t MAX_FUTURE_BLOCK_TIME = 30 * 60;
 
 /**
  * Timestamp window used as a grace period by code that compares external
  * timestamps (such as timestamps passed to RPCs, or wallet key creation times)
  * to block timestamps. This should be set at least as high as
- * MAX_FUTURE_BLOCK_TIME.
+ * MAX_FUTURE_BLOCK_TIME. Kept at Bitcoin's 2 hours (a larger grace period only
+ * makes wallet rescans start slightly earlier).
  */
-inline constexpr int64_t TIMESTAMP_WINDOW = MAX_FUTURE_BLOCK_TIME;
+inline constexpr int64_t TIMESTAMP_WINDOW = 2 * 60 * 60;
+static_assert(TIMESTAMP_WINDOW >= MAX_FUTURE_BLOCK_TIME);
 //! Init values for CBlockIndex nSequenceId when loaded from disk
 inline constexpr int32_t SEQ_ID_BEST_CHAIN_FROM_DISK = 0;
 inline constexpr int32_t SEQ_ID_INIT_FROM_DISK = 1;

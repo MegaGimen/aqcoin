@@ -55,7 +55,7 @@ MAX_STANDARD_TX_WEIGHT = 400000
 # Genesis block time (regtest)
 TIME_GENESIS_BLOCK = 1296688602
 
-MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60
+MAX_FUTURE_BLOCK_TIME = 30 * 60
 
 # Coinbase transaction outputs can only be spent after this number of new blocks (network rule)
 COINBASE_MATURITY = 100
@@ -71,9 +71,11 @@ MIN_BLOCKS_TO_KEEP = 288
 
 REGTEST_RETARGET_PERIOD = 150
 
-REGTEST_N_BITS = 0x207fffff  # difficulty retargeting is disabled in REGTEST chainparams"
-REGTEST_TARGET = 0x7fffff0000000000000000000000000000000000000000000000000000000000
-assert_equal(uint256_from_compact(REGTEST_N_BITS), REGTEST_TARGET)
+# AQ proof of work: nBits is the integer AQ threshold. Regtest's threshold is
+# fixed at 0 (any hash is valid); retargeting is disabled.
+REGTEST_N_BITS = 0
+# Equivalent hash target reported by RPCs: floor((2^256-1) / work(0)).
+REGTEST_TARGET = 2**256 - 1
 
 DIFF_1_N_BITS = 0x1d00ffff
 DIFF_1_TARGET = 0x00000000ffff0000000000000000000000000000000000000000000000000000

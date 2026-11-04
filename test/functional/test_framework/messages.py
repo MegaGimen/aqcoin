@@ -89,10 +89,9 @@ TX_MIN_STANDARD_VERSION = 1
 TX_MAX_STANDARD_VERSION = 3
 
 MAGIC_BYTES = {
-    "mainnet": b"\xf9\xbe\xb4\xd9",
-    "testnet4": b"\x1c\x16\x3f\x28",
-    "regtest": b"\xfa\xbf\xb5\xda",
-    "signet": b"\x0a\x03\xcf\x40",
+    "mainnet": b"\xb5\xde\xcc\xe6",
+    "testnet": b"\xa7\x95\xa0\x9c",
+    "regtest": b"\xb6\xb1\xa4\xfd",
 }
 
 def sha256(s):
@@ -170,6 +169,13 @@ def ser_uint256(u):
 
 def uint256_from_str(s):
     return int.from_bytes(s[:32], 'little')
+
+
+def aq_value(h):
+    """AQ value of a 256-bit hash (int or 32 bytes): the sum of its 64 hex digits."""
+    if isinstance(h, int):
+        h = h.to_bytes(32, 'little')
+    return sum((b >> 4) + (b & 0x0F) for b in h)
 
 
 def uint256_from_compact(c):
@@ -849,8 +855,8 @@ class CBlock(CBlockHeader):
         return self.get_merkle_root(hashes)
 
     def is_valid(self):
-        target = uint256_from_compact(self.nBits)
-        if self.hash_int > target:
+        # AQ proof of work: nBits is the threshold x; AQ(hash) must be >= x.
+        if self.nBits > 960 or aq_value(self.hash_int) < self.nBits:
             return False
         for tx in self.vtx:
             if not tx.is_valid():
@@ -860,8 +866,8 @@ class CBlock(CBlockHeader):
         return True
 
     def solve(self):
-        target = uint256_from_compact(self.nBits)
-        while self.hash_int > target:
+        # AQ proof of work: increment the nonce until AQ(hash) >= nBits.
+        while aq_value(self.hash_int) < self.nBits:
             self.nNonce += 1
 
     # Calculate the block weight using witness and non-witness

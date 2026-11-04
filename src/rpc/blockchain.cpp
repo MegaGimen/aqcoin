@@ -35,6 +35,7 @@
 #include <node/context.h>
 #include <node/utxo_snapshot.h>
 #include <node/warnings.h>
+#include <pow.h>
 #include <policy/feerate.h>
 #include <prevector.h>
 #include <primitives/block.h>
@@ -131,26 +132,12 @@ UniValue CreateRolledBackUTXOSnapshot(
     const fs::path& tmppath,
     bool in_memory);
 
-/* Calculate the difficulty for a given block index.
+/* Calculate the difficulty for a given block index: work(x) / work(x_min).
  */
-double GetDifficulty(const CBlockIndex& blockindex)
+double GetDifficulty(const CBlockIndex& blockindex, uint32_t aq_min_threshold)
 {
-    int nShift = (blockindex.nBits >> 24) & 0xff;
-    double dDiff =
-        (double)0x0000ffff / (double)(blockindex.nBits & 0x00ffffff);
-
-    while (nShift < 29)
-    {
-        dDiff *= 256.0;
-        nShift++;
-    }
-    while (nShift > 29)
-    {
-        dDiff /= 256.0;
-        nShift--;
-    }
-
-    return dDiff;
+    const double min_work{AQWork(aq_min_threshold).getdouble()};
+    return AQWork(blockindex.nBits).getdouble() / min_work;
 }
 
 static int ComputeNextBlockAndDepth(const CBlockIndex& tip, const CBlockIndex& blockindex, const CBlockIndex*& next)
@@ -191,7 +178,7 @@ static const CBlockIndex* ParseHashOrHeight(const UniValue& param, ChainstateMan
     }
 }
 
-UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex, const uint256 pow_limit)
+UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex, const uint32_t pow_limit)
 {
     // Serialize passed information without accessing chain state of the active chain!
     AssertLockNotHeld(cs_main); // For performance reasons
@@ -209,8 +196,9 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
     result.pushKV("mediantime", blockindex.GetMedianTimePast());
     result.pushKV("nonce", blockindex.nNonce);
     result.pushKV("bits", strprintf("%08x", blockindex.nBits));
+    result.pushKV("aq_threshold", blockindex.nBits);
     result.pushKV("target", GetTarget(blockindex, pow_limit).GetHex());
-    result.pushKV("difficulty", GetDifficulty(blockindex));
+    result.pushKV("difficulty", GetDifficulty(blockindex, pow_limit));
     result.pushKV("chainwork", blockindex.nChainWork.GetHex());
     result.pushKV("nTx", blockindex.nTx);
 
@@ -239,7 +227,7 @@ UniValue coinbaseTxToJSON(const CTransaction& coinbase_tx)
     return coinbase_tx_obj;
 }
 
-UniValue blockToJSON(BlockManager& blockman, const CBlock& block, const CBlockIndex& tip, const CBlockIndex& blockindex, TxVerbosity verbosity, const uint256 pow_limit)
+UniValue blockToJSON(BlockManager& blockman, const CBlock& block, const CBlockIndex& tip, const CBlockIndex& blockindex, TxVerbosity verbosity, const uint32_t pow_limit)
 {
     UniValue result = blockheaderToJSON(tip, blockindex, pow_limit);
 
@@ -546,7 +534,7 @@ static RPCMethod getdifficulty()
 {
     ChainstateManager& chainman = EnsureAnyChainman(request.context);
     LOCK(cs_main);
-    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveChain().Tip()));
+    return GetDifficulty(*CHECK_NONFATAL(chainman.ActiveChain().Tip()), chainman.GetConsensus().nAQMinThreshold);
 },
     };
 }
@@ -659,8 +647,9 @@ static RPCMethod getblockheader()
                             {RPCResult::Type::NUM_TIME, "time", "The block time expressed in " + UNIX_EPOCH_TIME},
                             {RPCResult::Type::NUM_TIME, "mediantime", "The median block time expressed in " + UNIX_EPOCH_TIME},
                             {RPCResult::Type::NUM, "nonce", "The nonce"},
-                            {RPCResult::Type::STR_HEX, "bits", "nBits: compact representation of the block difficulty target"},
-                            {RPCResult::Type::STR_HEX, "target", "The difficulty target"},
+                            {RPCResult::Type::STR_HEX, "bits", "nBits: the block's AQ threshold, as 8 hex digits"},
+                            {RPCResult::Type::NUM, "aq_threshold", "The AQ threshold x (nBits as an integer): the hash's hex digit sum must be >= x"},
+                            {RPCResult::Type::STR_HEX, "target", "Equivalent hash target (informational): floor((2^256-1)/work(x))"},
                             {RPCResult::Type::NUM, "difficulty", "The difficulty"},
                             {RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the current chain"},
                             {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
@@ -703,7 +692,7 @@ static RPCMethod getblockheader()
         return strHex;
     }
 
-    return blockheaderToJSON(*tip, *pblockindex, chainman.GetConsensus().powLimit);
+    return blockheaderToJSON(*tip, *pblockindex, chainman.GetConsensus().nAQMinThreshold);
 },
     };
 }
@@ -799,8 +788,9 @@ static std::vector<RPCResult> GetBlockFields(RPCResult tx_result, std::optional<
     fields.emplace_back(RPCResult::Type::NUM_TIME, "time", "The block time expressed in " + UNIX_EPOCH_TIME);
     fields.emplace_back(RPCResult::Type::NUM_TIME, "mediantime", "The median block time expressed in " + UNIX_EPOCH_TIME);
     fields.emplace_back(RPCResult::Type::NUM, "nonce", "The nonce");
-    fields.emplace_back(RPCResult::Type::STR_HEX, "bits", "nBits: compact representation of the block difficulty target");
-    fields.emplace_back(RPCResult::Type::STR_HEX, "target", "The difficulty target");
+    fields.emplace_back(RPCResult::Type::STR_HEX, "bits", "nBits: the block's AQ threshold, as 8 hex digits");
+    fields.emplace_back(RPCResult::Type::NUM, "aq_threshold", "The AQ threshold x (nBits as an integer)");
+    fields.emplace_back(RPCResult::Type::STR_HEX, "target", "Equivalent hash target (informational): floor((2^256-1)/work(x))");
     fields.emplace_back(RPCResult::Type::NUM, "difficulty", "The difficulty");
     fields.emplace_back(RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the chain up to this block (in hex)");
     fields.emplace_back(RPCResult::Type::NUM, "nTx", "The number of transactions in the block");
@@ -914,7 +904,7 @@ static RPCMethod getblock()
         tx_verbosity = TxVerbosity::SHOW_DETAILS_AND_PREVOUT;
     }
 
-    return blockToJSON(chainman.m_blockman, block, *tip, *pblockindex, tx_verbosity, chainman.GetConsensus().powLimit);
+    return blockToJSON(chainman.m_blockman, block, *tip, *pblockindex, tx_verbosity, chainman.GetConsensus().nAQMinThreshold);
 },
     };
 }
@@ -1408,8 +1398,9 @@ RPCMethod getblockchaininfo()
                 {RPCResult::Type::NUM, "blocks", "the height of the most-work fully-validated chain. The genesis block has height 0"},
                 {RPCResult::Type::NUM, "headers", "the current number of headers we have validated"},
                 {RPCResult::Type::STR, "bestblockhash", "the hash of the currently best block"},
-                {RPCResult::Type::STR_HEX, "bits", "nBits: compact representation of the block difficulty target"},
-                {RPCResult::Type::STR_HEX, "target", "the difficulty target"},
+                {RPCResult::Type::STR_HEX, "bits", "nBits: the current AQ threshold, as 8 hex digits"},
+                {RPCResult::Type::NUM, "aq_threshold", "the current AQ threshold x"},
+                {RPCResult::Type::STR_HEX, "target", "equivalent hash target (informational)"},
                 {RPCResult::Type::NUM, "difficulty", "the current difficulty"},
                 {RPCResult::Type::NUM_TIME, "time", "the block time expressed in " + UNIX_EPOCH_TIME},
                 {RPCResult::Type::NUM_TIME, "mediantime", "the median block time expressed in " + UNIX_EPOCH_TIME},
@@ -1430,7 +1421,6 @@ RPCMethod getblockchaininfo()
                 {RPCResult::Type::NUM, "pruneheight", /*optional=*/true, "the first block unpruned, all previous blocks were pruned (only present if pruning is enabled)"},
                 {RPCResult::Type::BOOL, "automatic_pruning", /*optional=*/true, "whether automatic pruning is enabled (only present if pruning is enabled)"},
                 {RPCResult::Type::NUM, "prune_target_size", /*optional=*/true, "the target size used by pruning (only present if automatic pruning is enabled)"},
-                {RPCResult::Type::STR_HEX, "signet_challenge", /*optional=*/true, "the block challenge (aka. block script), in hexadecimal (only present if the current network is a signet)"},
                 (IsDeprecatedRPCEnabled("warnings") ?
                     RPCResult{RPCResult::Type::STR, "warnings", "any network and blockchain warnings (DEPRECATED)"} :
                     RPCResult{RPCResult::Type::ARR, "warnings", "any network and blockchain warnings (run with `-deprecatedrpc=warnings` to return the latest warning as a single string)",
@@ -1458,8 +1448,9 @@ RPCMethod getblockchaininfo()
     obj.pushKV("headers", chainman.m_best_header ? chainman.m_best_header->nHeight : -1);
     obj.pushKV("bestblockhash", tip.GetBlockHash().GetHex());
     obj.pushKV("bits", strprintf("%08x", tip.nBits));
-    obj.pushKV("target", GetTarget(tip, chainman.GetConsensus().powLimit).GetHex());
-    obj.pushKV("difficulty", GetDifficulty(tip));
+    obj.pushKV("target", GetTarget(tip, chainman.GetConsensus().nAQMinThreshold).GetHex());
+    obj.pushKV("aq_threshold", tip.nBits);
+    obj.pushKV("difficulty", GetDifficulty(tip, chainman.GetConsensus().nAQMinThreshold));
     obj.pushKV("time", tip.GetBlockTime());
     obj.pushKV("mediantime", tip.GetMedianTimePast());
     obj.pushKV("verificationprogress", chainman.GuessVerificationProgress(&tip));
@@ -1489,11 +1480,6 @@ RPCMethod getblockchaininfo()
         if (automatic_pruning) {
             obj.pushKV("prune_target_size", chainman.m_blockman.GetPruneTarget());
         }
-    }
-    if (chainman.GetParams().GetChainType() == ChainType::SIGNET) {
-        const std::vector<uint8_t>& signet_challenge =
-            chainman.GetParams().GetConsensus().signet_challenge;
-        obj.pushKV("signet_challenge", HexStr(signet_challenge));
     }
 
     NodeContext& node = EnsureAnyNodeContext(request.context);
@@ -3594,8 +3580,9 @@ static RPCMethod loadtxoutset()
 const std::vector<RPCResult> RPCHelpForChainstate{
     {RPCResult::Type::NUM, "blocks", "number of blocks in this chainstate"},
     {RPCResult::Type::STR_HEX, "bestblockhash", "blockhash of the tip"},
-    {RPCResult::Type::STR_HEX, "bits", "nBits: compact representation of the block difficulty target"},
-    {RPCResult::Type::STR_HEX, "target", "The difficulty target"},
+    {RPCResult::Type::STR_HEX, "bits", "nBits: the AQ threshold, as 8 hex digits"},
+    {RPCResult::Type::NUM, "aq_threshold", "The AQ threshold x"},
+    {RPCResult::Type::STR_HEX, "target", "Equivalent hash target (informational)"},
     {RPCResult::Type::NUM, "difficulty", "difficulty of the tip"},
     {RPCResult::Type::NUM, "verificationprogress", "progress towards the network tip"},
     {RPCResult::Type::STR_HEX, "snapshot_blockhash", /*optional=*/true, "the base block of the snapshot this chainstate is based on, if any"},
@@ -3639,8 +3626,9 @@ return RPCMethod{
         data.pushKV("blocks", chain.Height());
         data.pushKV("bestblockhash",         tip->GetBlockHash().GetHex());
         data.pushKV("bits", strprintf("%08x", tip->nBits));
-        data.pushKV("target", GetTarget(*tip, chainman.GetConsensus().powLimit).GetHex());
-        data.pushKV("difficulty", GetDifficulty(*tip));
+        data.pushKV("target", GetTarget(*tip, chainman.GetConsensus().nAQMinThreshold).GetHex());
+        data.pushKV("aq_threshold", tip->nBits);
+        data.pushKV("difficulty", GetDifficulty(*tip, chainman.GetConsensus().nAQMinThreshold));
         data.pushKV("verificationprogress", chainman.GuessVerificationProgress(tip));
         data.pushKV("coins_db_cache_bytes",  cs.m_coinsdb_cache_size_bytes);
         data.pushKV("coins_tip_cache_bytes", cs.m_coinstip_cache_size_bytes);

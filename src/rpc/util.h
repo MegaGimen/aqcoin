@@ -548,14 +548,14 @@ void PushWarnings(const std::vector<bilingual_str>& warnings, UniValue& obj);
 
 std::vector<RPCResult> ScriptPubKeyDoc();
 
-/***
- * Get the target for a given block index.
+/**
+ * Equivalent hash target of a block's AQ threshold, for display only: the
+ * value t for which a uniformly random hash h satisfies h <= t with the same
+ * probability as AQ(h) >= nBits, i.e. floor((2^256 - 1) / work(nBits)).
  *
  * @param[in] blockindex    the block
- * @param[in] pow_limit     PoW limit (consensus parameter)
- *
- * @return  the target
+ * @param[in] aq_min        AQ minimum threshold (consensus parameter, unused)
  */
-uint256 GetTarget(const CBlockIndex& blockindex, uint256 pow_limit);
+uint256 GetTarget(const CBlockIndex& blockindex, uint32_t aq_min);
 
 #endif // BITCOIN_RPC_UTIL_H

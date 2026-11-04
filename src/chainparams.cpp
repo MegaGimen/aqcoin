@@ -96,29 +96,9 @@ void ReadTestNetArgs(const ArgsManager& args, CChainParams::TestNetOptions& opti
     HandleDeploymentArgs(args, options.dep_opts);
 }
 
-void ReadSigNetArgs(const ArgsManager& args, CChainParams::SigNetOptions& options)
-{
-    if (!args.GetArgs("-signetseednode").empty()) {
-        options.seeds.emplace(args.GetArgs("-signetseednode"));
-    }
-    if (!args.GetArgs("-signetchallenge").empty()) {
-        const auto signet_challenge = args.GetArgs("-signetchallenge");
-        if (signet_challenge.size() != 1) {
-            throw std::runtime_error("-signetchallenge cannot be multiple values.");
-        }
-        const auto val{TryParseHex<uint8_t>(signet_challenge[0])};
-        if (!val) {
-            throw std::runtime_error(strprintf("-signetchallenge must be hex, not '%s'.", signet_challenge[0]));
-        }
-        options.challenge.emplace(*val);
-    }
-    HandleDeploymentArgs(args, options.dep_opts);
-}
-
 void ReadRegTestArgs(const ArgsManager& args, CChainParams::RegTestOptions& options)
 {
     if (auto value = args.GetBoolArg("-fastprune")) options.fastprune = *value;
-    if (HasTestOption(args, "bip94")) options.enforce_bip94 = true;
 
     HandleDeploymentArgs(args, options.dep_opts);
 }
@@ -142,16 +122,6 @@ std::unique_ptr<const CChainParams> CreateChainParams(const ArgsManager& args, c
         auto opts = CChainParams::TestNetOptions{};
         ReadTestNetArgs(args, opts);
         return CChainParams::TestNet(opts);
-    }
-    case ChainType::TESTNET4: {
-        auto opts = CChainParams::TestNetOptions{};
-        ReadTestNetArgs(args, opts);
-        return CChainParams::TestNet4(opts);
-    }
-    case ChainType::SIGNET: {
-        auto opts = CChainParams::SigNetOptions{};
-        ReadSigNetArgs(args, opts);
-        return CChainParams::SigNet(opts);
     }
     case ChainType::REGTEST: {
         auto opts = CChainParams::RegTestOptions{};

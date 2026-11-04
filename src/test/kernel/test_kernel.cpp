@@ -673,9 +673,9 @@ BOOST_AUTO_TEST_CASE(logging_tests)
 
 BOOST_AUTO_TEST_CASE(btck_chainparams_tests)
 {
-    ChainParams params_signet{ChainType::SIGNET};
-    ChainParams params_signet_challenge{hex_string_to_byte_vec("51")};
-    CheckHandle(params_signet, params_signet_challenge);
+    ChainParams params_main{ChainType::MAINNET};
+    ChainParams params_test{ChainType::TESTNET};
+    CheckHandle(params_main, params_test);
 }
 
 BOOST_AUTO_TEST_CASE(btck_context_tests)

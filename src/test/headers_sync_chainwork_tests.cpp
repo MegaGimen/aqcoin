@@ -44,7 +44,7 @@ using State = HeadersSyncState::State;
     } while (false)
 
 constexpr size_t TARGET_BLOCKS{15'000};
-constexpr arith_uint256 CHAIN_WORK{TARGET_BLOCKS * 2};
+constexpr arith_uint256 CHAIN_WORK{TARGET_BLOCKS * 1};
 
 // Subtract MAX_HEADERS_RESULTS (2000 headers/message) + an arbitrary smaller
 // value (123) so our redownload buffer is well below the number of blocks
@@ -60,11 +60,9 @@ struct HeadersGeneratorSetup : public RegTestingSetup {
     // to ensure the headers are different).
     const std::vector<CBlockHeader>& FirstChain()
     {
-        // Block header hash target is half of max uint256 (2**256 / 2), expressible
-        // roughly as the coefficient 0x7fffff with the exponent 0x20 (32 bytes).
-        // This implies around every 2nd hash attempt should succeed, which
-        // is why CHAIN_WORK == TARGET_BLOCKS * 2.
-        assert(genesis.nBits == 0x207fffff);
+        // Regtest's AQ threshold is 0: every hash succeeds and each header
+        // contributes work(0) = 1, which is why CHAIN_WORK == TARGET_BLOCKS.
+        assert(genesis.nBits == 0);
 
         // Subtract 1 since the genesis block also contributes work so we reach
         // the CHAIN_WORK target.

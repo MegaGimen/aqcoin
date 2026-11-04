@@ -14,6 +14,7 @@
 #include <common/system.h>
 #include <compat/compat.h>
 #include <core_io.h>
+#include <pow.h>
 #include <crypto/sha256.h>
 #include <streams.h>
 #include <univalue.h>
@@ -91,10 +92,7 @@ static int AppInitUtil(ArgsManager& args, int argc, char* argv[])
 
 static void grind_task(uint32_t nBits, CBlockHeader header, uint32_t offset, uint32_t step, std::atomic<bool>& found, uint32_t& proposed_nonce)
 {
-    arith_uint256 target;
-    bool neg, over;
-    target.SetCompact(nBits, &neg, &over);
-    if (target == 0 || neg || over) return;
+    if (nBits > AQ_MAX_THRESHOLD) return;
     header.nNonce = offset;
 
     uint32_t finish = std::numeric_limits<uint32_t>::max() - step;
@@ -103,7 +101,7 @@ static void grind_task(uint32_t nBits, CBlockHeader header, uint32_t offset, uin
     while (!found && header.nNonce < finish) {
         const uint32_t next = (finish - header.nNonce < 5000*step) ? finish : header.nNonce + 5000*step;
         do {
-            if (UintToArith256(header.GetHash()) <= target) {
+            if (AQValue(header.GetHash()) >= nBits) {
                 if (!found.exchange(true)) {
                     proposed_nonce = header.nNonce;
                 }
@@ -177,13 +175,11 @@ static int GetChainParams(const std::vector<std::string>& args, std::string& str
 
     {
         UniValue pow{UniValue::VOBJ};
-        pow.pushKV("limit", consensus.powLimit.ToString());
+        pow.pushKV("aq_min_threshold", consensus.nAQMinThreshold);
+        pow.pushKV("aq_init_threshold", consensus.nAQInitThreshold);
         if (!consensus.fPowNoRetargeting) {
             pow.pushKV("target_spacing", TicksSeconds(consensus.PowTargetSpacing()));
-            pow.pushKV("difficulty_retarget_interval", consensus.DifficultyAdjustmentInterval());
-            std::string mindiff_blocks = (consensus.fPowAllowMinDifficultyBlocks ?
-                  (consensus.enforce_BIP94 ? "bip94" : "yes") : "no");
-            pow.pushKV("mindiff_blocks", mindiff_blocks);
+            pow.pushKV("lwma_window", consensus.nLWMAWindow);
         }
         result.pushKV("pow", pow);
     }

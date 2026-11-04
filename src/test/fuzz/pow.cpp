@@ -63,8 +63,15 @@ FUZZ_TARGET(pow, .init = initialize_pow)
         }
         {
             (void)GetBlockProof(current_block);
-            (void)CalculateNextWorkRequired(&current_block, fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, std::numeric_limits<int64_t>::max()), consensus_params);
-            if (current_block.nHeight != std::numeric_limits<int>::max() && current_block.nHeight - (consensus_params.DifficultyAdjustmentInterval() - 1) >= 0) {
+            // GetNextWorkRequired walks nLWMAWindow ancestors via pprev;
+            // only call it when that many ancestors are linked.
+            const CBlockIndex* walk{&current_block};
+            int64_t depth{0};
+            while (walk->pprev && depth <= consensus_params.nLWMAWindow) {
+                walk = walk->pprev;
+                ++depth;
+            }
+            if (depth > consensus_params.nLWMAWindow || current_block.nHeight < consensus_params.nLWMAWindow) {
                 (void)GetNextWorkRequired(&current_block, &(*block_header), consensus_params);
             }
         }
@@ -98,19 +105,15 @@ FUZZ_TARGET(pow_transition, .init = initialize_pow)
     const int32_t version{fuzzed_data_provider.ConsumeIntegral<int32_t>()};
     uint32_t nbits{fuzzed_data_provider.ConsumeIntegral<uint32_t>()};
 
-    const arith_uint256 pow_limit = UintToArith256(consensus_params.powLimit);
-    arith_uint256 old_target;
-    old_target.SetCompact(nbits);
-    if (old_target > pow_limit) {
-        nbits = pow_limit.GetCompact();
-    }
-    // Create one difficulty adjustment period worth of headers
-    for (int height = 0; height < consensus_params.DifficultyAdjustmentInterval(); ++height) {
+    // Clamp to a valid AQ threshold.
+    nbits = consensus_params.nAQMinThreshold + nbits % (AQ_MAX_THRESHOLD - consensus_params.nAQMinThreshold + 1);
+    // Create one LWMA window worth of headers (plus the one before it).
+    for (int height = 0; height <= consensus_params.nLWMAWindow; ++height) {
         CBlockHeader header;
         header.nVersion = version;
         header.nTime = old_time;
         header.nBits = nbits;
-        if (height == consensus_params.DifficultyAdjustmentInterval() - 1) {
+        if (height == consensus_params.nLWMAWindow) {
             header.nTime = new_time;
         }
         auto current_block{std::make_unique<CBlockIndex>(header)};

@@ -124,11 +124,6 @@ struct RegTestingSetup : public TestingSetup {
         : TestingSetup{ChainType::REGTEST} {}
 };
 
-/** Identical to TestingSetup, but chain set to testnet4 */
-struct Testnet4Setup : public TestingSetup {
-    Testnet4Setup()
-        : TestingSetup{ChainType::TESTNET4} {}
-};
 
 class CBlock;
 class CScript;
@@ -228,7 +223,7 @@ struct TestChain100Setup : public TestingSetup {
      */
     std::vector<CTransactionRef> PopulateMempool(FastRandomContext& det_rand, size_t num_transactions, bool submit);
 
-    FakeNodeClock m_clock{std::chrono::seconds{1598887952}}; // 2020-08-31, arbitrary
+    FakeNodeClock m_clock{std::chrono::seconds{1796342400}}; // 2026-12-04, 30 days after the AQCoin regtest genesis
     std::vector<CTransactionRef> m_coinbase_txns; // For convenience, coinbase transactions
     CKey coinbaseKey; // private/public key needed to spend coinbase transactions
 };

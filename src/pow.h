@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-present The Bitcoin Core developers
+// Copyright (c) 2026 The AQCoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,21 +16,44 @@ class CBlockIndex;
 class uint256;
 class arith_uint256;
 
+/** Largest possible AQ value of a 256-bit hash (64 hex digits * 15). */
+inline constexpr uint32_t AQ_MAX_THRESHOLD{960};
+
 /**
- * Convert nBits value to target.
- *
- * @param[in] nBits     compact representation of the target
- * @param[in] pow_limit PoW limit (consensus parameter)
- *
- * @return              the proof-of-work target or nullopt if the nBits value
- *                      is invalid (due to overflow or exceeding pow_limit)
+ * AQ value of a hash: the sum of its 64 hexadecimal digits (0..960).
+ * Independent of byte order.
  */
-std::optional<arith_uint256> DeriveTarget(unsigned int nBits, uint256 pow_limit);
+uint32_t AQValue(const uint256& hash);
 
-unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params&);
-unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nFirstBlockTime, const Consensus::Params&);
+/**
+ * work(x) = min(floor(2^256 / C(x)), 2^256 - 1), where C(x) is the number of
+ * 256-bit hashes with AQ >= x. Returns 0 for x > AQ_MAX_THRESHOLD.
+ */
+arith_uint256 AQWork(uint32_t threshold);
 
-/** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
+/**
+ * Map a target amount of work to the integer threshold x whose work(x) is
+ * nearest to it on a logarithmic scale (ties resolve to the lower x).
+ * The result is in [0, AQ_MAX_THRESHOLD] and is not clamped to any network minimum.
+ */
+uint32_t AQThresholdForWork(const arith_uint256& target_work);
+
+/**
+ * Return the AQ threshold (stored in nBits) the block following pindexLast
+ * must use. Per-block LWMA retargeting, see CalculateNextWorkRequired.
+ */
+unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader* pblock, const Consensus::Params&);
+
+/**
+ * LWMA difficulty retarget over the last params.nLWMAWindow blocks ending at
+ * pindexLast. Requires pindexLast->nHeight >= nLWMAWindow.
+ */
+unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, const Consensus::Params&);
+
+/** Whether nBits is an acceptable threshold on this network: nAQMinThreshold <= nBits <= 960. */
+bool AQThresholdInRange(unsigned int nBits, const Consensus::Params&);
+
+/** Check whether a block hash satisfies the AQ proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&);
 bool CheckProofOfWorkImpl(uint256 hash, unsigned int nBits, const Consensus::Params&);
 
@@ -38,12 +62,12 @@ bool CheckProofOfWorkImpl(uint256 hash, unsigned int nBits, const Consensus::Par
  * given height is not possible, given the proof-of-work on the prior block as
  * specified by old_nbits.
  *
- * This function only checks that the new value is within a factor of 4 of the
- * old value for blocks at the difficulty adjustment interval, and otherwise
- * requires the values to be the same.
- *
- * Always returns true on networks where min difficulty blocks are allowed,
- * such as regtest/testnet.
+ * With per-block LWMA retargeting the next threshold depends on the full
+ * window of prior timestamps and thresholds, which are not available here,
+ * and any threshold within the network's range is reachable after a suitable
+ * sequence of timestamps. This check therefore only verifies that new_nbits is
+ * within [nAQMinThreshold, 960]; the exact value is enforced by
+ * ContextualCheckBlockHeader once the header connects to a known chain.
  */
 bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t height, uint32_t old_nbits, uint32_t new_nbits);
 

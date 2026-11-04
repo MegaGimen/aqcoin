@@ -405,6 +405,30 @@ if(BUILD_UTIL)
 endif()
 
 
+if(BUILD_AQMINER)
+  # Standalone AQCoin CPU miner and genesis block grinder (contrib/aqminer, contrib/aq).
+  add_executable(aqminer
+    ${PROJECT_SOURCE_DIR}/contrib/aqminer/aqminer.cpp
+  )
+  target_link_libraries(aqminer
+    core_interface
+    bitcoin_crypto
+    univalue
+    Threads::Threads
+  )
+  install_binary_component(aqminer)
+
+  add_executable(aq-genesis-grind
+    ${PROJECT_SOURCE_DIR}/contrib/aq/genesis_grind.cpp
+  )
+  target_link_libraries(aq-genesis-grind
+    core_interface
+    bitcoin_crypto
+    Threads::Threads
+  )
+endif()
+
+
 if(BUILD_GUI)
   add_subdirectory(qt)
 endif()

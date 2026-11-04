@@ -116,7 +116,7 @@ class TestNode():
     ):
         self.index = i
         self.datadir_path = datadir_path
-        self.bitcoinconf = self.datadir_path / "bitcoin.conf"
+        self.bitcoinconf = self.datadir_path / "aqcoin.conf"
         self.stdout_dir = self.datadir_path / "stdout"
         self.stderr_dir = self.datadir_path / "stderr"
         self.chain = chain
@@ -200,18 +200,18 @@ class TestNode():
     AddressKeyPair = collections.namedtuple('AddressKeyPair', ['address', 'key'])
     PRIV_KEYS = [
             # address , privkey
-            AddressKeyPair('mjTkW3DjgyZck4KbiRusZsqTgaYTxdSz6z', 'cVpF924EspNh8KjYsfhgY96mmxvT6DgdWiTYMtMjuM74hJaU5psW'),
-            AddressKeyPair('msX6jQXvxiNhx3Q62PKeLPrhrqZQdSimTg', 'cUxsWyKyZ9MAQTaAhUQWJmBbSvHMwSmuv59KgxQV7oZQU3PXN3KE'),
-            AddressKeyPair('mnonCMyH9TmAsSj3M59DsbH8H63U3RKoFP', 'cTrh7dkEAeJd6b3MRX9bZK8eRmNqVCMH3LSUkE3dSFDyzjU38QxK'),
-            AddressKeyPair('mqJupas8Dt2uestQDvV2NH3RU8uZh2dqQR', 'cVuKKa7gbehEQvVq717hYcbE9Dqmq7KEBKqWgWrYBa2CKKrhtRim'),
-            AddressKeyPair('msYac7Rvd5ywm6pEmkjyxhbCDKqWsVeYws', 'cQDCBuKcjanpXDpCqacNSjYfxeQj8G6CAtH1Dsk3cXyqLNC4RPuh'),
-            AddressKeyPair('n2rnuUnwLgXqf9kk2kjvVm8R5BZK1yxQBi', 'cQakmfPSLSqKHyMFGwAqKHgWUiofJCagVGhiB4KCainaeCSxeyYq'),
-            AddressKeyPair('myzuPxRwsf3vvGzEuzPfK9Nf2RfwauwYe6', 'cQMpDLJwA8DBe9NcQbdoSb1BhmFxVjWD5gRyrLZCtpuF9Zi3a9RK'),
-            AddressKeyPair('mumwTaMtbxEPUswmLBBN3vM9oGRtGBrys8', 'cSXmRKXVcoouhNNVpcNKFfxsTsToY5pvB9DVsFksF1ENunTzRKsy'),
-            AddressKeyPair('mpV7aGShMkJCZgbW7F6iZgrvuPHjZjH9qg', 'cSoXt6tm3pqy43UMabY6eUTmR3eSUYFtB2iNQDGgb3VUnRsQys2k'),
-            AddressKeyPair('mq4fBNdckGtvY2mijd9am7DRsbRB4KjUkf', 'cN55daf1HotwBAgAKWVgDcoppmUNDtQSfb7XLutTLeAgVc3u8hik'),
-            AddressKeyPair('mpFAHDjX7KregM3rVotdXzQmkbwtbQEnZ6', 'cT7qK7g1wkYEMvKowd2ZrX1E5f6JQ7TM246UfqbCiyF7kZhorpX3'),
-            AddressKeyPair('mzRe8QZMfGi58KyWCse2exxEFry2sfF2Y7', 'cPiRWE8KMjTRxH1MWkPerhfoHFn5iHPWVK5aPqjW8NxmdwenFinJ'),
+            AddressKeyPair('TdFcC9omjriBwZ3hcYvXkEb4Msx1wJ6uG2', 'VqisQkqkzu9WH38yzFwViJqraQt6XPUvBqRgBSmUopC32QfQZmB2'),
+            AddressKeyPair('TmJxRX7y1bXH9Y8BvWLJWkcJY8xxg3KZY9', 'VpsVni7VgE7yZAybp4eKUvvgFNF1NcaCbC7TWWpE2GeNo9NVnmgt'),
+            AddressKeyPair('TgbdtUZKCLuk4wT9FC9t3x2ixPT25FEkmZ', 'VomKPNXkHj5SFJSnY7PQjUsjEDLUvN9ZiTQcZnTNLiJxKqYdwUzD'),
+            AddressKeyPair('Tj6mWhTAGmBUrNcW83VgYdo29SK7gZHjdA', 'VqowbJuCijU3ZduGDbMWinLJwfoRGH7WrSoeW5GH637AeRujotwV'),
+            AddressKeyPair('TmLSJE1xfy8WxbYLfske94LntdF4tNRjJE', 'Vk7pTe78rfZdfwDdxArBcuHkm6NNZRtUr1F93S9nX14ofUDSS6bs'),
+            AddressKeyPair('TveebbNyPZgQreUqvskag7t1kUxs3KCAay', 'VkVP3QAxTXc8SgkgPXQeVTRbHAmJjNNyAPfqzciwVBsYyJW4GzDz'),
+            AddressKeyPair('Tsnm651yvYCW7miLp7QKVW8Fhj5VbyaHmc', 'VkGSV56THCyznrn3XBscckkGWDDbvuJVkoQ7ftxwoHzDUfntgx12'),
+            AddressKeyPair('ToZo9gwveqNxgNfsEJC2EH6kUZqSJef9PZ', 'VnSPh4K1jtair5mvwCc8RqhxGKRSyFdCrGBdgpAc9UKMEtbjzfGA'),
+            AddressKeyPair('TiGyGP2jQdSmmBKc1N7Nk3cXaghHba691M', 'VniA9qgHAucnCksnhBmupeCrDVc5ui4Ar9gWDmgRVWaT7XveGwqu'),
+            AddressKeyPair('TirWsVDeoA3VjXVpdkAEwTy2Ytpj1e1Zis', 'VhyhuKSXQtfkKt5bS6jVPnYudDS1f4CjLi5fAUJCF7FepiAJWy8x'),
+            AddressKeyPair('Ti31yLKZAD1DsqmxPvuHiMANRuMSaB7WQC', 'Vo2TarTY4qK3WdjF4DGP2gkJt73wqHFdhB4cVPzwdSL65frdUaWf'),
+            AddressKeyPair('TtDVpX9Pi9reKphc6zegqKhpwANaoP462E', 'Vjd3mxuqUpEF6zQndLdU2sQt5hjj9TBoAS3iDQ9F2r3jy3hV7TJ8'),
     ]
 
     def get_deterministic_priv_key(self):
