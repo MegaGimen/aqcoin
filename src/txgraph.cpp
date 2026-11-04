@@ -19,7 +19,6 @@
 #include <span>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 namespace {
 
@@ -1289,7 +1288,9 @@ void GenericClusterImpl::ApplyRemovals(TxGraphImpl& graph, int level, std::span<
     m_mapping.resize(m_depgraph.PositionRange());
 
     // Filter removed transactions out of m_linearization.
-    std::erase_if(m_linearization, [&](auto pos) { return todo[pos]; });
+    m_linearization.erase(std::remove_if(m_linearization.begin(), m_linearization.end(),
+                                         [&](auto pos) { return todo[pos]; }),
+                          m_linearization.end());
 
     Compact();
     graph.GetClusterSet(level).m_cluster_usage += TotalMemoryUsage();

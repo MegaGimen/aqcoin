@@ -18,9 +18,7 @@
 
 namespace node {
 class BlockManager;
-struct NodeContext;
 }
-class BaseIndex;
 class CValidationInterface;
 class FakeNodeClock;
 struct TestingSetup;
@@ -63,13 +61,6 @@ public:
         const CBlockIndex* pindex);
 };
 
-struct ResetOptions {
-    bool init_block_filter_basic{false};
-};
-
-std::vector<std::pair<COutPoint, CAmount>> ResetChainmanAndMempool(TestingSetup& setup, FakeNodeClock& node_clock, const ResetOptions& opts = {});
-
-/// Drain validation callbacks before stopping an index, matching Shutdown() in init.cpp.
-void StopIndex(BaseIndex& index, node::NodeContext& node);
+std::vector<std::pair<COutPoint, CAmount>> ResetChainmanAndMempool(TestingSetup& setup, FakeNodeClock& node_clock);
 
 #endif // BITCOIN_TEST_UTIL_VALIDATION_H

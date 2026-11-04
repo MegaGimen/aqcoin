@@ -324,14 +324,6 @@ for host in $HOSTS; do
         # for the particular $HOST we're building for
         export HOST="$host"
 
-        # Make local modules available. These are passed to `guix shell` via
-        # --load-path, rather than exported via GUIX_PACKAGE_PATH, so they are
-        # only seen by the pinned Guix.
-        package_path="${VERSION_BASE}/guix-package-path"
-        mkdir -p "$package_path"
-        ln -sfn "${PWD}/contrib/guix/toolchains.scm" "${package_path}/toolchains.scm"
-        ln -sfn "${PWD}/contrib/guix/patches" "${package_path}/patches"
-
 cat << EOF
 INFO: Building ${VERSION:?not set} for platform triple ${HOST:?not set}:
       ...using reference timestamp: ${SOURCE_DATE_EPOCH:?not set}
@@ -399,11 +391,6 @@ EOF
         #     make the downloaded depends sources available to it. The sources
         #     should have been downloaded prior to this invocation.
         #
-        #   --load-path="$package_path"
-        #
-        #                     make our local modules (contrib/guix/toolchains.scm)
-        #                     available to the manifests
-        #
         #   --keep-failed     keep build tree of failed builds
         #
         #     When builds of the Guix environment itself (not Bitcoin Core)
@@ -435,7 +422,6 @@ EOF
             ${SOURCES_PATH:+--share="$SOURCES_PATH"}
             ${BASE_CACHE:+--share="$BASE_CACHE"}
             ${SDK_PATH:+--share="$SDK_PATH"}
-            --load-path="$package_path"
             --cores="$JOBS"
             --keep-failed
             --fallback
@@ -457,8 +443,7 @@ EOF
 
         case "$HOST" in
             *linux*)
-            time-machine shell --manifest="${PWD}/contrib/guix/linux_static.scm" \
-                                    --root="$(profiledir_for_host "${HOST}")" \
+            time-machine shell --root="$(profiledir_for_host "${HOST}")" \
                                     "${shell_opts[@]}" \
                                     bash -c "cd /bitcoin && bash contrib/guix/libexec/build_linux.sh"
 

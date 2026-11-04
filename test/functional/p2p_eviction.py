@@ -110,11 +110,10 @@ class P2PEvict(BitcoinTestFramework):
         # One of the non-protected peers must be evicted. We can't be sure which one because
         # 4 peers are protected via netgroup, which is identical for all peers,
         # and the eviction mechanism doesn't preserve the order of identical elements.
-        def get_evicted_peers():
-            return [i for i, peer in enumerate(node.p2ps) if not peer.is_connected]
-
-        self.wait_until(lambda: len(get_evicted_peers()) >= 1)  # wait for socket close
-        evicted_peers = get_evicted_peers()
+        evicted_peers = []
+        for i in range(len(node.p2ps)):
+            if not node.p2ps[i].is_connected:
+                evicted_peers.append(i)
 
         self.log.info("Test that one peer was evicted")
         self.log.debug("{} evicted peer: {}".format(len(evicted_peers), set(evicted_peers)))

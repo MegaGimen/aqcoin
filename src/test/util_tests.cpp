@@ -65,6 +65,11 @@ using util::TrimStringView;
 
 static const std::string STRING_WITH_EMBEDDED_NULL_CHAR{"1"s "\0" "1"s};
 
+/* defined in logging.cpp */
+namespace BCLog {
+    std::string LogEscapeMessage(std::string_view str);
+}
+
 BOOST_FIXTURE_TEST_SUITE(util_tests, BasicTestingSetup)
 
 namespace {
@@ -926,7 +931,7 @@ BOOST_AUTO_TEST_CASE(test_FormatSubVersion)
     comments.emplace_back("comment1");
     std::vector<std::string> comments2;
     comments2.emplace_back("comment1");
-    comments2.push_back(SanitizeString("Comment2; .,_?@-; !\"#$%&'()*+/<=>[]\\^`{|}~", SAFE_CHARS_UA_COMMENT)); // Semicolon is discouraged but not forbidden by BIP-0014
+    comments2.push_back(SanitizeString(std::string("Comment2; .,_?@-; !\"#$%&'()*+/<=>[]\\^`{|}~"), SAFE_CHARS_UA_COMMENT)); // Semicolon is discouraged but not forbidden by BIP-0014
     BOOST_CHECK_EQUAL(FormatSubVersion("Test", 99900, std::vector<std::string>()),std::string("/Test:9.99.0/"));
     BOOST_CHECK_EQUAL(FormatSubVersion("Test", 99900, comments),std::string("/Test:9.99.0(comment1)/"));
     BOOST_CHECK_EQUAL(FormatSubVersion("Test", 99900, comments2),std::string("/Test:9.99.0(comment1; Comment2; .,_?@-; )/"));
@@ -1153,7 +1158,7 @@ BOOST_AUTO_TEST_CASE(test_ToLower)
 
     BOOST_CHECK_EQUAL(ToLower(""), "");
     BOOST_CHECK_EQUAL(ToLower("#HODL"), "#hodl");
-    BOOST_CHECK_EQUAL(ToLower("\x00\xfe\xff"sv), "\x00\xfe\xff"sv);
+    BOOST_CHECK_EQUAL(ToLower("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
 BOOST_AUTO_TEST_CASE(test_ToUpper)
@@ -1167,14 +1172,14 @@ BOOST_AUTO_TEST_CASE(test_ToUpper)
 
     BOOST_CHECK_EQUAL(ToUpper(""), "");
     BOOST_CHECK_EQUAL(ToUpper("#hodl"), "#HODL");
-    BOOST_CHECK_EQUAL(ToUpper("\x00\xfe\xff"sv), "\x00\xfe\xff"sv);
+    BOOST_CHECK_EQUAL(ToUpper("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
 BOOST_AUTO_TEST_CASE(test_Capitalize)
 {
     BOOST_CHECK_EQUAL(Capitalize(""), "");
     BOOST_CHECK_EQUAL(Capitalize("bitcoin"), "Bitcoin");
-    BOOST_CHECK_EQUAL(Capitalize("\x00\xfe\xff"s), "\x00\xfe\xff"sv);
+    BOOST_CHECK_EQUAL(Capitalize("\x00\xfe\xff"), "\x00\xfe\xff");
 }
 
 static std::string SpanToStr(const std::span<const char>& span)
@@ -1387,6 +1392,19 @@ BOOST_AUTO_TEST_CASE(test_SplitString)
         BOOST_TEST(SplitString("x\0a,b"s, "\0,"s) == V({"x", "a", "b"}));
         BOOST_TEST(SplitString("abcdefg", "bcd") == V({"a", "", "", "efg"}));
     }
+}
+
+BOOST_AUTO_TEST_CASE(test_LogEscapeMessage)
+{
+    // ASCII and UTF-8 must pass through unaltered.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("Valid log message貓"), "Valid log message貓");
+    // Newlines must pass through unaltered.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("Message\n with newlines\n"), "Message\n with newlines\n");
+    // Other control characters are escaped in C syntax.
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage("\x01\x7f Corrupted log message\x0d"), R"(\x01\x7f Corrupted log message\x0d)");
+    // Embedded NULL characters are escaped too.
+    const std::string NUL("O\x00O", 3);
+    BOOST_CHECK_EQUAL(BCLog::LogEscapeMessage(NUL), R"(O\x00O)");
 }
 
 namespace {

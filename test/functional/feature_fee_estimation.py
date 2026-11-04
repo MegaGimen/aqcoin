@@ -164,7 +164,8 @@ def verify_estimate_response(estimate, feerate, errors):
 class EstimateFeeTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
-        self.noban_tx_relay = True  # faster tx relay
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
         self.extra_args = [
             [],
             ["-blockmaxweight=72000"],

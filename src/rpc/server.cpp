@@ -36,7 +36,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
-#include <vector>
 
 using util::SplitString;
 
@@ -111,7 +110,7 @@ std::string CRPCTable::help(std::string_view strCommand, const JSONRPCRequest& h
                 if (category != pcmd->category)
                 {
                     if (!category.empty())
-                        strRet += '\n';
+                        strRet += "\n";
                     category = pcmd->category;
                     strRet += "== " + Capitalize(category) + " ==\n";
                 }
@@ -636,7 +635,9 @@ bool CRPCTable::removeCommand(const std::string& name, const CRPCCommand* pcmd)
 {
     auto it = mapCommands.find(name);
     if (it != mapCommands.end()) {
-        if (std::erase(it->second, pcmd)) {
+        auto new_end = std::remove(it->second.begin(), it->second.end(), pcmd);
+        if (it->second.end() != new_end) {
+            it->second.erase(new_end, it->second.end());
             if (it->second.empty()) {
                 mapCommands.erase(it);
             }

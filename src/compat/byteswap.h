@@ -26,10 +26,22 @@
 #    if __has_builtin(__builtin_bswap64)
 #      define bitcoin_builtin_bswap64(x) __builtin_bswap64(x)
 #    endif
+#  elif defined(_MSC_VER)
+#      define bitcoin_builtin_bswap16(x) _byteswap_ushort(x)
+#      define bitcoin_builtin_bswap32(x) _byteswap_ulong(x)
+#      define bitcoin_builtin_bswap64(x) _byteswap_uint64(x)
 #  endif
 #endif
 
-inline constexpr uint16_t internal_bswap_16(uint16_t x)
+// MSVC's _byteswap_* functions are not constexpr
+
+#ifndef _MSC_VER
+#define BSWAP_CONSTEXPR constexpr
+#else
+#define BSWAP_CONSTEXPR
+#endif
+
+inline BSWAP_CONSTEXPR uint16_t internal_bswap_16(uint16_t x)
 {
 #ifdef bitcoin_builtin_bswap16
     return bitcoin_builtin_bswap16(x);
@@ -38,7 +50,7 @@ inline constexpr uint16_t internal_bswap_16(uint16_t x)
 #endif
 }
 
-inline constexpr uint32_t internal_bswap_32(uint32_t x)
+inline BSWAP_CONSTEXPR uint32_t internal_bswap_32(uint32_t x)
 {
 #ifdef bitcoin_builtin_bswap32
     return bitcoin_builtin_bswap32(x);
@@ -48,7 +60,7 @@ inline constexpr uint32_t internal_bswap_32(uint32_t x)
 #endif
 }
 
-inline constexpr uint64_t internal_bswap_64(uint64_t x)
+inline BSWAP_CONSTEXPR uint64_t internal_bswap_64(uint64_t x)
 {
 #ifdef bitcoin_builtin_bswap64
     return bitcoin_builtin_bswap64(x);

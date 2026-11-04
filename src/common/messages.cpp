@@ -24,7 +24,7 @@ using node::TransactionError;
 using util::Join;
 
 namespace common {
-const std::map<FeeReason, std::string>& FeeReasonMap()
+std::string StringForFeeReason(FeeReason reason)
 {
     static const std::map<FeeReason, std::string> fee_reason_strings = {
         {FeeReason::FEE_RATE_ESTIMATOR, "Fee Rate Estimator"},
@@ -33,22 +33,11 @@ const std::map<FeeReason, std::string>& FeeReasonMap()
         {FeeReason::FALLBACK, "Fallback fee"},
         {FeeReason::REQUIRED, "Minimum Required Fee"},
     };
-    return fee_reason_strings;
-}
-
-std::string StringForFeeReason(FeeReason reason)
-{
-    const auto& fee_reason_strings = FeeReasonMap();
     auto reason_string = fee_reason_strings.find(reason);
 
     if (reason_string == fee_reason_strings.end()) return "Unknown";
 
     return reason_string->second;
-}
-
-std::string FeeReasons(const std::string& delimiter)
-{
-    return Join(FeeReasonMap(), delimiter, [](const auto& reason) { return reason.second; });
 }
 
 const std::vector<std::pair<std::string, FeeEstimateMode>>& FeeModeMap()
@@ -140,9 +129,7 @@ bilingual_str TransactionErrorString(const TransactionError err)
         case TransactionError::MEMPOOL_ERROR:
             return Untranslated("Mempool internal error");
         case TransactionError::MAX_FEE_EXCEEDED:
-            return Untranslated("Fee exceeds maximum configured by user (maxtxfee)");
-        case TransactionError::MAX_FEE_RATE_EXCEEDED:
-            return Untranslated("Fee rate exceeds maximum configured by user (maxfeerate)");
+            return Untranslated("Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)");
         case TransactionError::MAX_BURN_EXCEEDED:
             return Untranslated("Unspendable output exceeds maximum configured by user (maxburnamount)");
         case TransactionError::INVALID_PACKAGE:

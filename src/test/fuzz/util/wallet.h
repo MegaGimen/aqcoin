@@ -73,6 +73,7 @@ struct FuzzedWallet {
             return *Assert(wallet->GetNewChangeDestination(type));
         }
     }
+    CScript GetScriptPubKey(FuzzedDataProvider& fuzzed_data_provider) { return GetScriptForDestination(GetDestination(fuzzed_data_provider)); }
 };
 }
 

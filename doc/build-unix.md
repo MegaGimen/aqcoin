@@ -88,7 +88,3 @@ be compiled in disable-wallet mode with:
 In this case there is no dependency on SQLite.
 
 Mining is also possible in disable-wallet mode using the `getblocktemplate` RPC call.
-
-### Test Suite Dependencies
-
-See [`test/README.md`](/test/README.md#dependencies-and-prerequisites).

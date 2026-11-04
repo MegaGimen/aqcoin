@@ -30,7 +30,6 @@
 #include <sync.h>
 #include <uint256.h>
 #include <util/check.h>
-#include <util/not_null.h>
 #include <util/sock.h>
 #include <util/threadinterrupt.h>
 
@@ -687,7 +686,7 @@ class CNode
 public:
     /** Transport serializer/deserializer. The receive side functions are only called under cs_vRecv, while
      * the sending side functions are only called under cs_vSend. */
-    const util::NotNullUniquePtr<Transport> m_transport;
+    const std::unique_ptr<Transport> m_transport;
 
     const NetPermissionFlags m_permission_flags;
 
@@ -1172,11 +1171,11 @@ public:
 
     ~CConnman();
 
-    bool Start(CScheduler& scheduler, const Options& options) EXCLUSIVE_LOCKS_REQUIRED(!m_total_bytes_sent_mutex, !m_added_nodes_mutex, !m_addr_fetches_mutex, !mutexMsgProc, !m_anchors_mutex);
+    bool Start(CScheduler& scheduler, const Options& options) EXCLUSIVE_LOCKS_REQUIRED(!m_total_bytes_sent_mutex, !m_added_nodes_mutex, !m_addr_fetches_mutex, !mutexMsgProc);
 
     void StopThreads();
-    void StopNodes() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_reconnections_mutex, !m_anchors_mutex);
-    void Stop() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_reconnections_mutex, !m_anchors_mutex)
+    void StopNodes() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_reconnections_mutex);
+    void Stop() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !m_reconnections_mutex)
     {
         AssertLockNotHeld(m_nodes_mutex);
         AssertLockNotHeld(m_reconnections_mutex);
@@ -1187,7 +1186,7 @@ public:
     void Interrupt() EXCLUSIVE_LOCKS_REQUIRED(!mutexMsgProc);
     bool GetNetworkActive() const { return fNetworkActive; };
     bool GetUseAddrmanOutgoing() const { return m_use_addrman_outgoing; };
-    void SetNetworkActive(bool active) EXCLUSIVE_LOCKS_REQUIRED(!m_anchors_mutex, !m_nodes_mutex);
+    void SetNetworkActive(bool active);
 
     /**
      * Open a new P2P connection and initialize it with the PeerManager at `m_msgproc`.
@@ -1373,13 +1372,13 @@ public:
      * Attempts to open a connection. Currently only used from tests.
      *
      * @param[in]   address     Address of node to try connecting to
-     * @param[in]   conn_type   ConnectionType::OUTBOUND_FULL_RELAY, ConnectionType::BLOCK_RELAY,
-     *                          ConnectionType::ADDR_FETCH, ConnectionType::FEELER or ConnectionType::MANUAL
+     * @param[in]   conn_type   ConnectionType::OUTBOUND, ConnectionType::BLOCK_RELAY,
+     *                          ConnectionType::ADDR_FETCH or ConnectionType::FEELER
      * @param[in]   use_v2transport  Set to true if node attempts to connect using BIP 324 v2 transport protocol.
      * @return      bool        Returns false if there are no available
      *                          slots for this connection:
      *                          - conn_type not a supported ConnectionType
-     *                          - Max total automatic outbound or manual connection capacity filled
+     *                          - Max total outbound connection capacity filled
      *                          - Max connection capacity for type is filled
      */
     bool AddConnection(const std::string& address, ConnectionType conn_type, bool use_v2transport)
@@ -1474,8 +1473,7 @@ private:
                                  !m_addr_fetches_mutex,
                                  !m_nodes_mutex,
                                  !m_reconnections_mutex,
-                                 !m_unused_i2p_sessions_mutex,
-                                 !m_anchors_mutex);
+                                 !m_unused_i2p_sessions_mutex);
 
     /// \anchor msghand
     void ThreadMessageHandler() EXCLUSIVE_LOCKS_REQUIRED(!m_nodes_mutex, !mutexMsgProc);
@@ -1749,12 +1747,10 @@ private:
     BanMan* m_banman;
 
     /**
-     * Addresses that were saved during the previous clean shutdown or when
-     * the network was deactivated. We'll attempt to make block-relay-only
-     * connections to them once the network is active.
+     * Addresses that were saved during the previous clean shutdown. We'll
+     * attempt to make block-relay-only connections to them.
      */
-    mutable Mutex m_anchors_mutex;
-    std::vector<CAddress> m_anchors GUARDED_BY(m_anchors_mutex);
+    std::vector<CAddress> m_anchors;
 
     /** SipHasher seeds for deterministic randomness */
     const uint64_t nSeed0, nSeed1;

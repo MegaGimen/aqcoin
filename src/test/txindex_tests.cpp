@@ -22,7 +22,6 @@
 #include <streams.h>
 #include <sync.h>
 #include <test/util/setup_common.h>
-#include <test/util/validation.h>
 #include <util/byte_units.h>
 #include <util/check.h>
 #include <util/strencodings.h>
@@ -171,7 +170,8 @@ BOOST_FIXTURE_TEST_CASE(txindex_initial_sync, TestChain100Setup)
         LookupTx(txindex, txn.GetHash());
     }
 
-    StopIndex(txindex, m_node);
+    // shutdown sequence (c.f. Shutdown() in init.cpp)
+    txindex.Stop();
 }
 
 BOOST_FIXTURE_TEST_CASE(txindex_collision_scan_path, TestChain100Setup)
@@ -223,7 +223,7 @@ BOOST_FIXTURE_TEST_CASE(txindex_collision_scan_path, TestChain100Setup)
     db.Write(txindex::LegacyTxKey(fake_txid), fake_physical);
     BOOST_CHECK(!txindex.FindTx(fake_txid));
 
-    StopIndex(txindex, m_node);
+    txindex.Stop();
 }
 
 BOOST_FIXTURE_TEST_CASE(txindex_legacy_fallback, TestChain100Setup)
@@ -253,7 +253,7 @@ BOOST_FIXTURE_TEST_CASE(txindex_legacy_fallback, TestChain100Setup)
 
     LookupTx(txindex, legacy_txid);
 
-    StopIndex(txindex, m_node);
+    txindex.Stop();
 }
 
 BOOST_FIXTURE_TEST_CASE(txindex_locator_upgrade, TestChain100Setup)
@@ -349,7 +349,7 @@ BOOST_FIXTURE_TEST_CASE(txindex_reorg_keeps_stale_entries, TestChain100Setup)
     BOOST_REQUIRE_EQUAL(reorg_bucket.size(), 2U);
     BOOST_CHECK(reorg_bucket.front() == original_bucket.front());
 
-    StopIndex(txindex, m_node);
+    txindex.Stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

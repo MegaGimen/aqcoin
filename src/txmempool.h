@@ -22,7 +22,6 @@
 #include <txgraph.h>
 #include <util/feefrac.h>
 #include <util/hasher.h>
-#include <util/not_null.h>
 #include <util/result.h>
 
 #include <boost/multi_index/hashed_index.hpp>
@@ -577,17 +576,11 @@ public:
     /** Removes a transaction from the unbroadcast set */
     void RemoveUnbroadcastTx(const Txid& txid, bool unchecked = false);
 
-    /** Returns a copy of the unbroadcast txid set */
+    /** Returns transactions in unbroadcast set */
     std::set<Txid> GetUnbroadcastTxs() const
     {
         LOCK(cs);
         return m_unbroadcast_txids;
-    }
-
-    size_t GetUnbroadcastTxCount() const
-    {
-        LOCK(cs);
-        return m_unbroadcast_txids.size();
     }
 
     /** Returns whether a txid is in the unbroadcast set */
@@ -723,11 +716,10 @@ public:
         friend class CTxMemPool;
     };
 
-    util::NotNullUniquePtr<ChangeSet> GetChangeSet() EXCLUSIVE_LOCKS_REQUIRED(cs)
-    {
+    std::unique_ptr<ChangeSet> GetChangeSet() EXCLUSIVE_LOCKS_REQUIRED(cs) {
         Assume(!m_have_changeset);
         m_have_changeset = true;
-        return util::NotNull{std::make_unique<ChangeSet>(this)};
+        return std::make_unique<ChangeSet>(this);
     }
 
     bool m_have_changeset GUARDED_BY(cs){false};

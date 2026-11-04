@@ -20,11 +20,9 @@
 #include <serialize.h>
 #include <streams.h>
 #include <sync.h>
-#include <tinyformat.h>
 #include <uint256.h>
 #include <util/fs.h>
 #include <util/log.h>
-#include <util/string.h>
 #include <validation.h>
 
 #include <algorithm>
@@ -36,7 +34,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -159,14 +156,6 @@ bool TxIndex::CustomAppend(const interfaces::BlockInfo& block)
 
 BaseIndex::DB& TxIndex::GetDB() const { return *m_db; }
 
-template <typename... Args>
-[[noreturn]] static void WarnAndThrowErr(util::ConstevalFormatString<sizeof...(Args)> fmt, const Args&... args)
-{
-    const std::string err{tfm::format(fmt, args...)};
-    LogWarning("%s", err);
-    throw std::runtime_error{err};
-}
-
 std::optional<TxIndexResult> TxIndex::FindTx(const Txid& tx_hash) const
 {
     struct Candidate {
@@ -186,45 +175,38 @@ std::optional<TxIndexResult> TxIndex::FindTx(const Txid& tx_hash) const
         for (it->Seek(key); it->Valid() && it->GetKey(key) && key.hash_prefix == prefix; it->Next()) {
             uint256 candidate_block_hash;
             if (!m_db->Read(txindex::BlockSeqKey{key.pos.block_seq}, candidate_block_hash)) {
-                // Read may throw dbwrapper_error.
-                // Read returns false for internal deserialize errors or a
-                // missing key. A missing key can only happen after corruption.
-                WarnAndThrowErr("%s: Corrupt index: block sequence %u not found for txid %s",
-                                GetName(), key.pos.block_seq, tx_hash.ToString());
+                LogWarning("Block sequence %u not found for txid %s", key.pos.block_seq, tx_hash.ToString());
+                continue;
             }
             LOCK(cs_main);
             const CBlockIndex* block_index{m_chainstate->m_blockman.LookupBlockIndex(candidate_block_hash)};
-            // Stale entries can remain after an unclean shutdown. Unknown blocks
-            // cannot be in the active chain, so skip them.
-            if (!block_index) continue;
-            const bool in_active_chain{m_chainstate->m_chain.Contains(*block_index)};
-            if (!(block_index->nStatus & BLOCK_HAVE_DATA)) {
-                // A stale entry may also refer to a known block without data.
-                // Skip it if it is not in the active chain.
-                if (!in_active_chain) continue;
-                WarnAndThrowErr("%s: Block data %s unexpectedly unavailable for txid %s. Caused by data corruption?",
-                                GetName(), candidate_block_hash.ToString(), tx_hash.ToString());
+            if (!block_index) {
+                LogWarning("Block index entry %s not found for txid %s", candidate_block_hash.ToString(), tx_hash.ToString());
+                continue;
             }
+            if (!(block_index->nStatus & BLOCK_HAVE_DATA)) continue;
             const FlatFilePos tx_position{block_index->nFile, block_index->nDataPos + key.pos.tx_offset_in_block};
-            candidates.emplace_back(tx_position, candidate_block_hash, key.pos.block_seq, in_active_chain);
+            candidates.emplace_back(tx_position, candidate_block_hash, key.pos.block_seq, m_chainstate->m_chain.Contains(*block_index));
         }
     }
 
     // Prefer active-chain matches, then later-connected blocks.
-    std::ranges::sort(candidates, std::greater{}, [](const Candidate& c) { return std::pair{c.in_active_chain, c.block_seq}; });
+    std::ranges::sort(candidates, std::greater{}, [](const Candidate& c) {
+        return std::pair{c.in_active_chain, c.block_seq};
+    });
 
     for (const auto& candidate : candidates) {
         AutoFile file{m_chainstate->m_blockman.OpenBlockFile(candidate.tx_position, /*fReadOnly=*/true)};
         if (file.IsNull()) {
-            WarnAndThrowErr("%s: Failed to open block file for txid %s at %s in block %s",
-                            GetName(), tx_hash.ToString(), candidate.tx_position.ToString(), candidate.block_hash.ToString());
+            LogWarning("OpenBlockFile failed for txid %s", tx_hash.ToString());
+            continue;
         }
         CTransactionRef tx;
         try {
             file >> TX_WITH_WITNESS(tx);
         } catch (const std::exception& e) {
-            WarnAndThrowErr("%s: Deserialize or I/O error (%s). txid %s at %s in block %s",
-                            GetName(), e.what(), tx_hash.ToString(), candidate.tx_position.ToString(), candidate.block_hash.ToString());
+            LogWarning("Deserialize or I/O error - %s", e.what());
+            continue;
         }
         if (tx->GetHash() == tx_hash) {
             return TxIndexResult{candidate.block_hash, std::move(tx)};
@@ -238,19 +220,14 @@ std::optional<TxIndexResult> TxIndex::FindTx(const Txid& tx_hash) const
 std::optional<TxIndexResult> TxIndex::FindLegacyTx(const Txid& tx_hash) const
 {
     CDiskTxPos postx;
-    const auto read{m_db->TryRead(txindex::LegacyTxKey(tx_hash), postx)};
-    if (!read) {
-        WarnAndThrowErr("%s: Failed to read legacy entry for txid %s: %s",
-                        GetName(), tx_hash.ToString(), read.error().err_msg);
-    }
-    if (!read.value()) {
+    if (!m_db->Read(txindex::LegacyTxKey(tx_hash), postx)) {
         return std::nullopt;
     }
 
     AutoFile file{m_chainstate->m_blockman.OpenBlockFile(postx, /*fReadOnly=*/true)};
     if (file.IsNull()) {
-        WarnAndThrowErr("%s: Failed to open block file for txid %s at %s",
-                        GetName(), tx_hash.ToString(), postx.ToString());
+        LogError("OpenBlockFile failed");
+        return std::nullopt;
     }
     CBlockHeader header;
     CTransactionRef tx;
@@ -259,12 +236,12 @@ std::optional<TxIndexResult> TxIndex::FindLegacyTx(const Txid& tx_hash) const
         file.seek(postx.nTxOffset, SEEK_CUR);
         file >> TX_WITH_WITNESS(tx);
     } catch (const std::exception& e) {
-        WarnAndThrowErr("%s: Deserialize or I/O error (%s). txid %s at %s",
-                        GetName(), e.what(), tx_hash.ToString(), postx.ToString());
+        LogError("Deserialize or I/O error - %s", e.what());
+        return std::nullopt;
     }
     if (tx->GetHash() != tx_hash) {
-        WarnAndThrowErr("%s: txid mismatch in legacy index. txid %s at %s",
-                        GetName(), tx_hash.ToString(), postx.ToString());
+        LogError("txid mismatch");
+        return std::nullopt;
     }
     return TxIndexResult{header.GetHash(), std::move(tx)};
 }

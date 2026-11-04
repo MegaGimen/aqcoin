@@ -5,7 +5,6 @@
 #include <chainparams.h>
 #include <consensus/validation.h>
 #include <kernel/disconnected_transactions.h>
-#include <node/block_template_manager.h>
 #include <node/chainstatemanager_args.h>
 #include <node/kernel_notifications.h>
 #include <node/utxo_snapshot.h>
@@ -432,7 +431,6 @@ struct SnapshotTestSetup : TestChain100Setup {
         {
             // Process all callbacks referring to the old manager before wiping it.
             m_node.validation_signals->SyncWithValidationInterfaceQueue();
-            m_node.block_template_manager.reset();
             LOCK(::cs_main);
             chainman.ResetChainstates();
             BOOST_CHECK_EQUAL(chainman.m_chainstates.size(), 0);
@@ -457,7 +455,6 @@ struct SnapshotTestSetup : TestChain100Setup {
             // new one.
             m_node.chainman.reset();
             m_node.chainman = std::make_unique<ChainstateManager>(*Assert(m_node.shutdown_signal), chainman_opts, blockman_opts);
-            CreateBlockTemplateManager();
         }
         return *Assert(m_node.chainman);
     }

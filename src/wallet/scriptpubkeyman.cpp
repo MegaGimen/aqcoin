@@ -21,7 +21,6 @@
 #include <util/time.h>
 #include <util/translation.h>
 
-#include <limits>
 #include <optional>
 
 using common::PSBTError;
@@ -294,7 +293,7 @@ bool LegacyDataSPKM::LoadCScript(const CScript& redeemScript)
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE)
     {
         std::string strAddr = EncodeDestination(ScriptHash(redeemScript));
-        WalletLogPrintf("%s: Warning: This wallet contains a redeemScript of size %i which exceeds maximum size %i thus can never be redeemed. Do not use address %s.", __func__, redeemScript.size(), MAX_SCRIPT_ELEMENT_SIZE, strAddr);
+        WalletLogPrintf("%s: Warning: This wallet contains a redeemScript of size %i which exceeds maximum size %i thus can never be redeemed. Do not use address %s.\n", __func__, redeemScript.size(), MAX_SCRIPT_ELEMENT_SIZE, strAddr);
         return true;
     }
 
@@ -1015,7 +1014,6 @@ bool DescriptorScriptPubKeyMan::Encrypt(const CKeyingMaterial& master_key, Walle
         return false;
     }
 
-    CryptedKeyMap crypted_keys;
     for (const KeyMap::value_type& key_in : m_map_keys)
     {
         const CKey &key = key_in.second;
@@ -1025,19 +1023,10 @@ bool DescriptorScriptPubKeyMan::Encrypt(const CKeyingMaterial& master_key, Walle
         if (!EncryptSecret(master_key, secret, pubkey.GetHash(), crypted_secret)) {
             return false;
         }
-        if (!batch->WriteCryptedDescriptorKey(GetID(), pubkey, crypted_secret)) {
-            return false;
-        }
-        crypted_keys[pubkey.GetID()] = make_pair(pubkey, std::move(crypted_secret));
+        m_map_crypted_keys[pubkey.GetID()] = make_pair(pubkey, crypted_secret);
+        batch->WriteCryptedDescriptorKey(GetID(), pubkey, crypted_secret);
     }
-
-    batch->RegisterTxnListener({
-        .on_commit = [this, keys = std::move(crypted_keys)]() mutable {
-            LOCK(cs_desc_man);
-            m_map_crypted_keys = std::move(keys);
-            m_map_keys.clear();
-        },
-        .on_abort = [] {}});
+    m_map_keys.clear();
     return true;
 }
 
@@ -1128,14 +1117,8 @@ bool DescriptorScriptPubKeyMan::TopUpWithDB(WalletBatch& batch, unsigned int siz
         target_size = m_keypool_size;
     }
 
-    // Calculate the new range_end. next_index can be as high as 2^31-1 on an imported
-    // descriptor and target_size is user controlled, so compute the end in a wider type.
-    // The range is left unchanged if that end does not fit in the int32_t it is stored in.
-    const int64_t target_end{int64_t{m_wallet_descriptor.GetNext()} + target_size};
-    int32_t new_range_end = m_wallet_descriptor.GetEnd();
-    if (target_end <= std::numeric_limits<int32_t>::max()) {
-        new_range_end = std::max(static_cast<int32_t>(target_end), m_wallet_descriptor.GetEnd());
-    }
+    // Calculate the new range_end
+    int32_t new_range_end = std::max(m_wallet_descriptor.GetNext() + (int32_t)target_size, m_wallet_descriptor.GetEnd());
 
     // If the descriptor is not ranged, we actually just want to fill the first cache item
     if (!m_wallet_descriptor.descriptor->IsRange()) {
@@ -1192,7 +1175,7 @@ std::vector<WalletDestination> DescriptorScriptPubKeyMan::MarkUnusedAddresses(co
     if (IsMine(script)) {
         int32_t index = m_map_script_pub_keys[script];
         if (index >= m_wallet_descriptor.GetNext()) {
-            WalletLogPrintf("%s: Detected a used keypool item at index %d, mark all keypool items up to this item as used", __func__, index);
+            WalletLogPrintf("%s: Detected a used keypool item at index %d, mark all keypool items up to this item as used\n", __func__, index);
             auto out_keys = std::make_unique<FlatSigningProvider>();
             std::vector<CScript> scripts_temp;
             while (index >= m_wallet_descriptor.GetNext()) {
@@ -1206,7 +1189,7 @@ std::vector<WalletDestination> DescriptorScriptPubKeyMan::MarkUnusedAddresses(co
             }
         }
         if (!TopUp()) {
-            WalletLogPrintf("%s: Topping up keypool failed (locked wallet)", __func__);
+            WalletLogPrintf("%s: Topping up keypool failed (locked wallet)\n", __func__);
         }
     }
 
@@ -1237,17 +1220,12 @@ bool DescriptorScriptPubKeyMan::AddDescriptorKeyWithDB(WalletBatch& batch, const
             return false;
         }
 
-        if (!batch.WriteCryptedDescriptorKey(GetID(), pubkey, crypted_secret)) {
-            return false;
-        }
-        m_map_crypted_keys[pubkey.GetID()] = make_pair(pubkey, std::move(crypted_secret));
+        m_map_crypted_keys[pubkey.GetID()] = make_pair(pubkey, crypted_secret);
+        return batch.WriteCryptedDescriptorKey(GetID(), pubkey, crypted_secret);
     } else {
-        if (!batch.WriteDescriptorKey(GetID(), pubkey, key.GetPrivKey())) {
-            return false;
-        }
         m_map_keys[pubkey.GetID()] = key;
+        return batch.WriteDescriptorKey(GetID(), pubkey, key.GetPrivKey());
     }
-    return true;
 }
 
 bool DescriptorScriptPubKeyMan::IsHDEnabled() const

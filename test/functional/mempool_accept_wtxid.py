@@ -21,7 +21,6 @@ from test_framework.wallet import (
 class MempoolWtxidTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        self.noban_tx_relay = True  # faster tx relay
 
     def run_test(self):
         node = self.nodes[0]

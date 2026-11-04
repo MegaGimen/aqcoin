@@ -5,7 +5,6 @@
 #include <index/txospenderindex.h>
 #include <test/util/common.h>
 #include <test/util/setup_common.h>
-#include <test/util/validation.h>
 #include <validation.h>
 
 #include <boost/test/unit_test.hpp>
@@ -71,7 +70,8 @@ BOOST_FIXTURE_TEST_CASE(txospenderindex_initial_sync, TestChain100Setup)
         BOOST_CHECK_EQUAL((*tx_spender)->block_hash, tip_hash);
     }
 
-    StopIndex(txospenderindex, m_node);
+    // Shutdown sequence (c.f. Shutdown() in init.cpp)
+    txospenderindex.Stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

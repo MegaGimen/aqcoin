@@ -10,8 +10,8 @@
 #include <consensus/merkle.h>
 #include <consensus/params.h>
 #include <crypto/hex_base.h>
+#include <hash.h>
 #include <kernel/messagestartchars.h>
-#include <kernel/signet.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
@@ -180,7 +180,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
         bech32_hrp = "bc";
-        silent_payments_hrp = "sp";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
@@ -301,7 +300,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         bech32_hrp = "tb";
-        silent_payments_hrp = "tsp";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
@@ -415,7 +413,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         bech32_hrp = "tb";
-        silent_payments_hrp = "tsp";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_testnet4), std::end(chainparams_seed_testnet4));
 
@@ -470,7 +467,7 @@ public:
         vSeeds.clear();
 
         if (!options.challenge) {
-            bin = kernel::SIGNET_DEFAULT_CHALLENGE;
+            bin = "512103ad5e0edad18cb1f0fc0d28a3d4f1f3e445640337489abb10404f2d1e086be430210359ef5021964fe22d6f8e05b2463c9540ce96883fe3b278760f048f5189f2e6c452ae"_hex_v_u8;
             vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_signet), std::end(chainparams_seed_signet));
             vSeeds.emplace_back("seed.signet.bitcoin.sprovoost.nl.");
             vSeeds.emplace_back("seed.signet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
@@ -529,7 +526,11 @@ public:
 
         ApplyDeploymentOptions(options.dep_opts);
 
-        pchMessageStart = kernel::GetSignetMessageStart(consensus.signet_challenge);
+        // message start is defined as the first 4 bytes of the sha256d of the block script
+        HashWriter h{};
+        h << consensus.signet_challenge;
+        uint256 hash = h.GetHash();
+        std::copy_n(hash.begin(), 4, pchMessageStart.begin());
 
         nDefaultPort = 38333;
         nPruneAfterHeight = 1000;
@@ -567,7 +568,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         bech32_hrp = "tb";
-        silent_payments_hrp = "tsp";
 
         fDefaultConsistencyChecks = false;
         m_is_mockable_chain = false;
@@ -676,7 +676,6 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         bech32_hrp = "bcrt";
-        silent_payments_hrp = "sprt";
 
         // Copied from Testnet4.
         m_headers_sync_params = HeadersSyncParams{

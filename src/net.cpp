@@ -44,11 +44,9 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
-#include <list>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
-#include <vector>
 
 TRACEPOINT_SEMAPHORE(net, closed_connection);
 TRACEPOINT_SEMAPHORE(net, evicted_inbound_connection);
@@ -1904,11 +1902,9 @@ bool CConnman::AddConnection(const std::string& address, ConnectionType conn_typ
     std::optional<int> max_connections;
     switch (conn_type) {
     case ConnectionType::INBOUND:
+    case ConnectionType::MANUAL:
     case ConnectionType::PRIVATE_BROADCAST:
         return false;
-    // no separate per-type limit for MANUAL because semAddnode limits them
-    case ConnectionType::MANUAL:
-        break;
     case ConnectionType::OUTBOUND_FULL_RELAY:
         max_connections = m_max_outbound_full_relay;
         break;
@@ -1930,8 +1926,8 @@ bool CConnman::AddConnection(const std::string& address, ConnectionType conn_typ
     // Max connections of specified type already exist
     if (max_connections != std::nullopt && existing_connections >= max_connections) return false;
 
-    // Max total automatic outbound or manual connections already exist
-    CountingSemaphoreGrant<> grant(conn_type == ConnectionType::MANUAL ? *semAddnode : *semOutbound, true);
+    // Max total outbound connections already exist
+    CountingSemaphoreGrant<> grant(*semOutbound, true);
     if (!grant) return false;
 
     OpenNetworkConnection(/*addrConnect=*/CAddress{},
@@ -1974,7 +1970,7 @@ void CConnman::DisconnectNodes()
             if (pnode->fDisconnect)
             {
                 // remove from m_nodes
-                std::erase(m_nodes, pnode);
+                m_nodes.erase(remove(m_nodes.begin(), m_nodes.end(), pnode), m_nodes.end());
 
                 // Add to reconnection list if appropriate. We don't reconnect right here, because
                 // the creation of a connection is a blocking operation (up to several seconds),
@@ -2012,7 +2008,7 @@ void CConnman::DisconnectNodes()
         {
             // Destroy the object only after other threads have stopped using it.
             if (pnode->GetRefCount() <= 0) {
-                std::erase(m_nodes_disconnected, pnode);
+                m_nodes_disconnected.remove(pnode);
                 DeleteNode(pnode);
             }
         }
@@ -2614,7 +2610,7 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
     AssertLockNotHeld(m_nodes_mutex);
     AssertLockNotHeld(m_reconnections_mutex);
     AssertLockNotHeld(m_unused_i2p_sessions_mutex);
-    AssertLockNotHeld(m_anchors_mutex);
+
     FastRandomContext rng;
     // Connect to specific addresses
     if (!connect.empty())
@@ -2722,7 +2718,9 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
                 // In case previously unreachable networks become reachable
                 // (e.g. in case of -onlynet changes by the user), fixed seeds will
                 // be loaded only for networks for which we have no addresses.
-                std::erase_if(seed_addrs, [&fixed_seed_networks](const CAddress& addr) { return !fixed_seed_networks.contains(addr.GetNetwork()); });
+                seed_addrs.erase(std::remove_if(seed_addrs.begin(), seed_addrs.end(),
+                                                [&fixed_seed_networks](const CAddress& addr) { return !fixed_seed_networks.contains(addr.GetNetwork()); }),
+                                 seed_addrs.end());
                 CNetAddr local;
                 local.SetInternal("fixedseeds");
                 addrman.get().Add(seed_addrs, local);
@@ -2804,11 +2802,7 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
         // block-relay-only peer (to confirm our tip is current, see below) or the next_feeler
         // timer to decide if we should open a FEELER.
 
-        // Only consume anchors while the network is active; otherwise they would be
-        // popped and then dropped by OpenNetworkConnection(), losing them for the
-        // next activation and for the dump at shutdown.
-        const bool have_anchors{fNetworkActive && WITH_LOCK(m_anchors_mutex, return !m_anchors.empty())};
-        if (have_anchors && (nOutboundBlockRelay < m_max_outbound_block_relay)) {
+        if (!m_anchors.empty() && (nOutboundBlockRelay < m_max_outbound_block_relay)) {
             conn_type = ConnectionType::BLOCK_RELAY;
             anchor = true;
         } else if (nOutboundFullRelay < m_max_outbound_full_relay) {
@@ -2868,23 +2862,15 @@ void CConnman::ThreadOpenConnections(const std::vector<std::string> connect, std
         const auto reachable_nets{g_reachable_nets.All()};
 
         while (!m_interrupt_net->interrupted()) {
-            if (anchor) {
-                std::optional<CAddress> anchor_addr;
-                {
-                    LOCK(m_anchors_mutex);
-                    if (!m_anchors.empty()) {
-                        anchor_addr = m_anchors.back();
-                        m_anchors.pop_back();
-                    }
-                }
-                if (anchor_addr) {
-                    if (!anchor_addr->IsValid() || IsLocal(*anchor_addr) || !g_reachable_nets.Contains(*anchor_addr) ||
-                        !m_msgproc->HasAllDesirableServiceFlags(anchor_addr->nServices) ||
-                        outbound_ipv46_peer_netgroups.contains(m_netgroupman.GetGroup(*anchor_addr))) continue;
-                    addrConnect = *anchor_addr;
-                    LogDebug(BCLog::NET, "Trying to make an anchor connection to %s\n", addrConnect.ToStringAddrPort());
-                    break;
-                }
+            if (anchor && !m_anchors.empty()) {
+                const CAddress addr = m_anchors.back();
+                m_anchors.pop_back();
+                if (!addr.IsValid() || IsLocal(addr) || !g_reachable_nets.Contains(addr) ||
+                    !m_msgproc->HasAllDesirableServiceFlags(addr.nServices) ||
+                    outbound_ipv46_peer_netgroups.contains(m_netgroupman.GetGroup(addr))) continue;
+                addrConnect = addr;
+                LogDebug(BCLog::NET, "Trying to make an anchor connection to %s\n", addrConnect.ToStringAddrPort());
+                break;
             }
 
             // If we didn't find an appropriate destination after trying 100 addresses fetched from addrman,
@@ -3419,24 +3405,12 @@ bool CConnman::BindListenPort(const CService& addrBind, bilingual_str& strError,
         return false;
     }
 
-#ifdef WIN32
-    // Prevent another process from binding to the same address and port,
-    // which could allow it to intercept incoming P2P connections. On Windows,
-    // SO_REUSEADDR is NOT exclusive, so another process running under the same
-    // user account could bind to the same port.
-    if (sock->SetSockOpt(SOL_SOCKET, SO_EXCLUSIVEADDRUSE, &nOne, sizeof(int)) == SOCKET_ERROR) {
-        strError = Untranslated(strprintf("Error setting SO_EXCLUSIVEADDRUSE on socket: %s", NetworkErrorString(WSAGetLastError())));
-        LogError("%s\n", strError.original);
-        return false;
-    }
-#else
     // Allow binding if the port is still in TIME_WAIT state after
     // the program was closed and restarted.
     if (sock->SetSockOpt(SOL_SOCKET, SO_REUSEADDR, &nOne, sizeof(int)) == SOCKET_ERROR) {
         strError = Untranslated(strprintf("Error setting SO_REUSEADDR on socket: %s, continuing anyway", NetworkErrorString(WSAGetLastError())));
         LogInfo("%s\n", strError.original);
     }
-#endif
 
     // some systems don't have IPV6_V6ONLY but are always v6only; others do have the option
     // and enable it by default or not. Try to enable it, if possible.
@@ -3497,21 +3471,6 @@ void CConnman::SetNetworkActive(bool active)
 
     if (fNetworkActive == active) {
         return;
-    }
-
-    if (!active) {
-        // Remember the current block-relay-only peers so they can be retried
-        // once the network is re-enabled, or dumped at shutdown. Keep any
-        // not-yet-tried anchors if there are no such peers.
-        auto anchors = GetCurrentBlockRelayOnlyConns();
-        if (anchors.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
-            // Keep the oldest peers, as when saving anchors at shutdown.
-            anchors.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
-        }
-        if (!anchors.empty()) {
-            LOCK(m_anchors_mutex);
-            m_anchors = std::move(anchors);
-        }
     }
 
     fNetworkActive = active;
@@ -3640,14 +3599,11 @@ bool CConnman::Start(CScheduler& scheduler, const Options& connOptions)
 
     if (m_use_addrman_outgoing) {
         // Load addresses from anchors.dat
-        LOCK(m_anchors_mutex);
         m_anchors = ReadAnchors(gArgs.GetDataDirNet() / ANCHORS_DATABASE_FILENAME);
         if (m_anchors.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
             m_anchors.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
         }
-        if (fNetworkActive) {
-            LogInfo("%i block-relay-only anchors will be tried for connections.\n", m_anchors.size());
-        }
+        LogInfo("%i block-relay-only anchors will be tried for connections.\n", m_anchors.size());
     }
 
     if (m_client_interface) {
@@ -3793,7 +3749,6 @@ void CConnman::StopNodes()
 {
     AssertLockNotHeld(m_nodes_mutex);
     AssertLockNotHeld(m_reconnections_mutex);
-    AssertLockNotHeld(m_anchors_mutex);
 
     if (fAddressesInitialized) {
         DumpAddresses();
@@ -3802,12 +3757,6 @@ void CConnman::StopNodes()
         if (m_use_addrman_outgoing) {
             // Anchor connections are only dumped during clean shutdown.
             std::vector<CAddress> anchors_to_dump = GetCurrentBlockRelayOnlyConns();
-            {
-                LOCK(m_anchors_mutex);
-                if (!fNetworkActive && !m_anchors.empty()) {
-                    anchors_to_dump = m_anchors;
-                }
-            }
             if (anchors_to_dump.size() > MAX_BLOCK_RELAY_ONLY_ANCHORS) {
                 anchors_to_dump.resize(MAX_BLOCK_RELAY_ONLY_ANCHORS);
             }
@@ -3851,7 +3800,9 @@ std::vector<CAddress> CConnman::GetAddressesUnsafe(size_t max_addresses, size_t 
 {
     std::vector<CAddress> addresses = addrman.get().GetAddr(max_addresses, max_pct, network, filtered);
     if (m_banman) {
-        std::erase_if(addresses, [this](const CAddress& addr) { return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr); });
+        addresses.erase(std::remove_if(addresses.begin(), addresses.end(),
+                        [this](const CAddress& addr){return m_banman->IsDiscouraged(addr) || m_banman->IsBanned(addr);}),
+                        addresses.end());
     }
     return addresses;
 }
@@ -4125,12 +4076,12 @@ ServiceFlags CConnman::GetLocalServices() const
     return m_local_services;
 }
 
-static util::NotNullUniquePtr<Transport> MakeTransport(NodeId id, bool use_v2transport, bool inbound) noexcept
+static std::unique_ptr<Transport> MakeTransport(NodeId id, bool use_v2transport, bool inbound) noexcept
 {
     if (use_v2transport) {
-        return util::NotNull{std::make_unique<V2Transport>(id, /*initiating=*/!inbound)};
+        return std::make_unique<V2Transport>(id, /*initiating=*/!inbound);
     } else {
-        return util::NotNull{std::make_unique<V1Transport>(id)};
+        return std::make_unique<V1Transport>(id);
     }
 }
 

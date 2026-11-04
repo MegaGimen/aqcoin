@@ -35,7 +35,8 @@ class InvalidBlockRequestTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.setup_clean_chain = True
-        self.noban_tx_relay = True  # faster tx relay
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
 
     def run_test(self):
         # Add p2p connection to node0

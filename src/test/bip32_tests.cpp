@@ -8,7 +8,6 @@
 #include <key.h>
 #include <key_io.h>
 #include <streams.h>
-#include <test/util/common.h>
 #include <test/util/setup_common.h>
 #include <util/bip32.h>
 #include <util/strencodings.h>
@@ -130,25 +129,17 @@ void RunTest(const TestVector& test)
     key.SetSeed(seed);
     pubkey = key.Neuter();
     for (const TestDerivation &derive : test.vDerive) {
-        // Test serialization round trip
-        DataStream ss{};
-        ss << key;
-        ss << pubkey;
-        BOOST_CHECK_EQUAL(ss.size(), 2 * BIP32_EXTKEY_SIZE);
-        CExtKey key_deser;
-        CExtPubKey pubkey_deser;
-        ss >> key_deser;
-        ss >> pubkey_deser;
-        BOOST_CHECK_EQUAL(key_deser, key);
-        BOOST_CHECK_EQUAL(pubkey_deser, pubkey);
+        unsigned char data[74];
+        key.Encode(data);
+        pubkey.Encode(data);
 
         // Test private key
         BOOST_CHECK(EncodeExtKey(key) == derive.prv);
-        BOOST_CHECK_EQUAL(DecodeExtKey(derive.prv), key); //ensure a base58 decoded key also matches
+        BOOST_CHECK(DecodeExtKey(derive.prv) == key); //ensure a base58 decoded key also matches
 
         // Test public key
         BOOST_CHECK(EncodeExtPubKey(pubkey) == derive.pub);
-        BOOST_CHECK_EQUAL(DecodeExtPubKey(derive.pub), pubkey); //ensure a base58 decoded pubkey also matches
+        BOOST_CHECK(DecodeExtPubKey(derive.pub) == pubkey); //ensure a base58 decoded pubkey also matches
 
         // Derive new keys
         CExtKey keyNew;
@@ -158,7 +149,7 @@ void RunTest(const TestVector& test)
             // Compare with public derivation
             CExtPubKey pubkeyNew2;
             BOOST_CHECK(pubkey.Derive(pubkeyNew2, derive.nChild));
-            BOOST_CHECK_EQUAL(pubkeyNew, pubkeyNew2);
+            BOOST_CHECK(pubkeyNew == pubkeyNew2);
         }
         key = keyNew;
         pubkey = pubkeyNew;
@@ -194,109 +185,6 @@ BOOST_AUTO_TEST_CASE(bip32_test5) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(bip32_deserialize_invalid)
-{
-    // A serialized extended key is exactly BIP32_EXTKEY_SIZE bytes. A shorter
-    // stream must throw rather than read past the end.
-    for (size_t len{0}; len < BIP32_EXTKEY_SIZE; ++len) {
-        CExtKey key;
-        CExtPubKey pubkey;
-        DataStream ss_key{std::vector<unsigned char>(len)};
-        DataStream ss_pubkey{std::vector<unsigned char>(len)};
-        BOOST_CHECK_THROW(ss_key >> key, std::ios_base::failure);
-        BOOST_CHECK_THROW(ss_pubkey >> pubkey, std::ios_base::failure);
-    }
-
-    // Serialize a valid depth-0 xprv/xpub to mutate below.
-    const CExtKey master{DecodeExtKey(test1.vDerive[0].prv)};
-    const CExtPubKey master_pub{master.Neuter()};
-    BOOST_REQUIRE(master.nDepth == 0);
-    std::vector<unsigned char> key_bytes, pubkey_bytes;
-    {
-        DataStream ss{};
-        ss << master;
-        const auto ss_span{MakeUCharSpan(ss)};
-        key_bytes.assign(ss_span.begin(), ss_span.end());
-        DataStream sp{};
-        sp << master_pub;
-        const auto sp_span{MakeUCharSpan(sp)};
-        pubkey_bytes.assign(sp_span.begin(), sp_span.end());
-    }
-    BOOST_CHECK_EQUAL(key_bytes.size(), BIP32_EXTKEY_SIZE);
-    BOOST_CHECK_EQUAL(pubkey_bytes.size(), BIP32_EXTKEY_SIZE);
-
-    // A longer stream is not invalid: exactly BIP32_EXTKEY_SIZE bytes are consumed
-    // and the trailing byte is left unread.
-    {
-        std::vector<unsigned char> extra{key_bytes};
-        extra.push_back(0);
-        DataStream ss{extra};
-        CExtKey key;
-        ss >> key;
-        BOOST_CHECK_EQUAL(key, master);
-        BOOST_CHECK_EQUAL(ss.size(), 1);
-    }
-    {
-        std::vector<unsigned char> extra{pubkey_bytes};
-        extra.push_back(0);
-        DataStream ss{extra};
-        CExtPubKey pubkey;
-        ss >> pubkey;
-        BOOST_CHECK_EQUAL(pubkey, master_pub);
-        BOOST_CHECK_EQUAL(ss.size(), 1);
-    }
-
-    const auto deser_extkey{[](std::vector<unsigned char> bytes) {
-        DataStream ss{bytes};
-        CExtKey key;
-        ss >> key;
-        return key;
-    }};
-    const auto deser_extpubkey{[](std::vector<unsigned char> bytes) {
-        DataStream ss{bytes};
-        CExtPubKey pubkey;
-        ss >> pubkey;
-        return pubkey;
-    }};
-
-    // Non-zero private key prefix (offset 41) => invalid.
-    {
-        auto bytes{key_bytes};
-        bytes[41] = 1;
-        BOOST_CHECK(!deser_extkey(bytes).key.IsValid());
-    }
-    // Non-zero child index with nDepth == 0 (offset 8) => invalid.
-    {
-        auto bytes{key_bytes};
-        bytes[8] = 1;
-        BOOST_CHECK(!deser_extkey(bytes).key.IsValid());
-    }
-    // Non-zero parent fingerprint with nDepth == 0 (offset 1) => invalid.
-    {
-        auto bytes{key_bytes};
-        bytes[1] = 1;
-        BOOST_CHECK(!deser_extkey(bytes).key.IsValid());
-    }
-    // Invalid public key header (offset 41) => invalid.
-    {
-        auto bytes{pubkey_bytes};
-        bytes[41] = 0;
-        BOOST_CHECK(!deser_extpubkey(bytes).pubkey.IsValid());
-    }
-    // Non-zero child index with nDepth == 0 (offset 8) => invalid.
-    {
-        auto bytes{pubkey_bytes};
-        bytes[8] = 1;
-        BOOST_CHECK(!deser_extpubkey(bytes).pubkey.IsValid());
-    }
-    // Non-zero parent fingerprint with nDepth == 0 (offset 1) => invalid.
-    {
-        auto bytes{pubkey_bytes};
-        bytes[1] = 1;
-        BOOST_CHECK(!deser_extpubkey(bytes).pubkey.IsValid());
-    }
-}
-
 BOOST_AUTO_TEST_CASE(bip32_derive_ext_key)
 {
     const CExtKey master{DecodeExtKey(test1.vDerive[0].prv)};
@@ -308,13 +196,13 @@ BOOST_AUTO_TEST_CASE(bip32_derive_ext_key)
     KeyOriginInfo expected_origin;
     expected_origin.fingerprint = master.id_key_fingerprint();
     expected_origin.path = path;
-    BOOST_CHECK_EQUAL(derived->second, expected_origin);
+    BOOST_CHECK(derived->second == expected_origin);
 
     const auto root{DeriveExtKey(master, {})};
     BOOST_REQUIRE(root);
-    BOOST_CHECK_EQUAL(root->first, master);
+    BOOST_CHECK(root->first == master);
     expected_origin.path.clear();
-    BOOST_CHECK_EQUAL(root->second, expected_origin);
+    BOOST_CHECK(root->second == expected_origin);
 
     CExtKey max_depth{master};
     for (auto i{0}; i++ < 255;) {

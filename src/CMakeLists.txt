@@ -102,7 +102,6 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   coins.cpp
   common/args.cpp
   common/bloom.cpp
-  common/bip352.cpp
   common/config.cpp
   common/init.cpp
   common/interfaces.cpp
@@ -120,7 +119,6 @@ add_library(bitcoin_common STATIC EXCLUDE_FROM_ALL
   deploymentinfo.cpp
   external_signer.cpp
   init/common.cpp
-  ipc/listen.cpp
   kernel/chainparams.cpp
   key.cpp
   key_io.cpp
@@ -216,7 +214,6 @@ add_library(bitcoin_node STATIC EXCLUDE_FROM_ALL
   net_processing.cpp
   netgroup.cpp
   node/abort.cpp
-  node/block_template_manager.cpp
   node/blockmanager_args.cpp
   node/blockstorage.cpp
   node/caches.cpp

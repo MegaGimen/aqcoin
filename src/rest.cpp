@@ -325,8 +325,6 @@ static void BlockUndoToJSON(const CBlockUndo& block_undo, UniValue& result)
         UniValue tx_prevouts(UniValue::VARR);
         for (const Coin& coin : tx_undo.vprevout) {
             UniValue prevout(UniValue::VOBJ);
-            prevout.pushKV("generated", coin.IsCoinBase());
-            prevout.pushKV("height", coin.nHeight);
             prevout.pushKV("value", ValueFromAmount(coin.out.nValue));
 
             UniValue script_pub_key(UniValue::VOBJ);
@@ -372,12 +370,8 @@ static bool rest_spent_txouts(const std::any& context, HTTPRequest* req, const s
     }
 
     CBlockUndo block_undo;
-    if (pblockindex->nHeight > 0) {
-        // Blocks that were never connected or have been pruned have no undo data.
-        const bool have_undo{WITH_LOCK(cs_main, return (pblockindex->nStatus & BLOCK_HAVE_UNDO) != 0)};
-        if (!have_undo || !chainman->m_blockman.ReadBlockUndo(block_undo, *pblockindex)) {
-            return RESTERR(req, HTTP_NOT_FOUND, hashStr + " undo not available");
-        }
+    if (pblockindex->nHeight > 0 && !chainman->m_blockman.ReadBlockUndo(block_undo, *pblockindex)) {
+        return RESTERR(req, HTTP_NOT_FOUND, hashStr + " undo not available");
     }
 
     switch (rf) {

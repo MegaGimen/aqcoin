@@ -17,7 +17,6 @@
 #include <validation.h>
 
 #include <ranges>
-#include <unordered_map>
 #include <vector>
 
 const TestingSetup* g_setup;
@@ -214,7 +213,13 @@ FUZZ_TARGET(block_index_tree, .init = initialize_block_index_tree)
         blockman.CleanupForFuzzing();
         // Delete all blocks but Genesis from block index
         uint256 genesis_hash = genesis->GetBlockHash();
-        std::erase_if(blockman.m_block_index, [&](const auto& entry) { return entry.first != genesis_hash; });
+        for (auto it = blockman.m_block_index.begin(); it != blockman.m_block_index.end();) {
+            if (it->first != genesis_hash) {
+                it = blockman.m_block_index.erase(it);
+            } else {
+                ++it;
+            }
+        }
         chainman.ActiveChainstate().TryAddBlockIndexCandidate(genesis);
         assert(blockman.m_block_index.size() == 1);
         assert(chainman.ActiveChainstate().setBlockIndexCandidates.size() == 1);

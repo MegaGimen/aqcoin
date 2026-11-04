@@ -14,6 +14,8 @@
 #include <QStringList>
 #include <QVariant>
 
+class PeerTablePriv;
+
 namespace interfaces {
 class Node;
 }

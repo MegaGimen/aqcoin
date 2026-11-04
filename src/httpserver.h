@@ -101,7 +101,7 @@ public:
      * @param[in] key The field-name of the header to search for
      * @returns Views into all values matching the provided key (valid while this object is alive)
      */
-    std::vector<std::string_view> FindAll(std::string_view key) const LIFETIMEBOUND;
+    std::vector<std::string_view> FindAll(std::string_view key) const;
     void Write(std::string&& key, std::string&& value);
     /**
      * @param[in] key The field-name of the header to search for and delete
@@ -132,7 +132,6 @@ private:
 
 struct HTTPVersion {
     /**
-     * @name Protocol version
      * Default HTTP protocol version 1.1 is used by error responses
      * when a request is unreadable.
      */
@@ -155,25 +154,23 @@ class HTTPRemoteClient;
 class HTTPRequest
 {
 public:
-    enum class State {
-        Init,
-        NeedsHeaders,
-        NeedsBody,
-        Complete,
-        Error
-    };
-
     explicit HTTPRequest(const std::shared_ptr<HTTPRemoteClient>& client) : m_client{client} {}
     //! Construct with a null client for unit tests
     explicit HTTPRequest() : m_client{} {}
 
     /**
-     * Try to read an HTTP request or part of it.
-     * @param[in]   reader  Source of client request data.
-     * @returns     The updated state describing which part(s) remain.
+     * Methods that attempt to parse HTTP request fields line-by-line
+     * from a receive buffer.
+     * @param[in]   reader  A LineReader object constructed over a span of data.
+     * @returns     true    If the request field was parsed.
+     *              false   If there was not enough data in the buffer to complete the field.
      * @throws      std::runtime_error if data is invalid.
      */
-    State Load(util::LineReader& reader);
+    /// @{
+    bool LoadControlData(util::LineReader& reader);
+    bool LoadHeaders(util::LineReader& reader);
+    bool LoadBody(util::LineReader& reader);
+    /// @}
 
     void WriteReply(HTTPStatusCode status, std::span<const std::byte> reply_body = {});
     void WriteReply(HTTPStatusCode status, std::string_view reply_body_view)
@@ -181,7 +178,7 @@ public:
         WriteReply(status, std::as_bytes(std::span{reply_body_view}));
     }
 
-    const HTTPVersion& GetVersion() const LIFETIMEBOUND { return m_version; }
+    const HTTPVersion& GetVersion() const { return m_version; }
     std::shared_ptr<HTTPRemoteClient> GetClient() const { return m_client.lock(); }
 
     // These methods reimplement the API from http_libevent::HTTPRequest
@@ -196,23 +193,17 @@ public:
     std::optional<uint64_t> GetChunkSize() const { return m_chunk_size; }
     uint64_t GetChunkProgress() const { return m_chunk_read; }
 
+    enum class State {
+        Init,
+        NeedsHeaders,
+        NeedsBody,
+        Complete,
+        Error
+    };
     State GetState() const { return m_state; }
+    void SetState(State state) { m_state = state; }
 
 private:
-    /**
-     * @name Request parsers
-     * Methods that attempt to parse HTTP request fields line-by-line
-     * from a receive buffer.
-     * @returns     true    If the request field was parsed.
-     *              false   If there was not enough data in the buffer to complete the field.
-     * @throws      std::runtime_error if data is invalid.
-     */
-    /// @{
-    bool LoadControlData(util::LineReader& reader);
-    bool LoadHeaders(util::LineReader& reader);
-    bool LoadBody(util::LineReader& reader);
-    /// @}
-
     HTTPRequestMethod m_method;
     std::string m_target;
     HTTPVersion m_version;
@@ -410,8 +401,7 @@ private:
      */
     std::thread m_thread_socket_handler;
 
-    /**
-     * @name Request dispatch
+    /*
      * What to do with HTTP requests once received, validated and parsed.
      * Set in main thread by server start and interrupt but read in
      * worker threads.
@@ -503,15 +493,14 @@ class HTTPRemoteClient
 {
 public:
     explicit HTTPRemoteClient(HTTPServer::Id id, const CService& addr, std::unique_ptr<Sock> socket)
-        : m_id(id), m_addr(addr), m_origin(addr.ToStringAddrPort()), m_sock{std::move(socket)}, m_idle_since{MockableSteadyClock::now()} {}
+        : m_id(id), m_addr(addr), m_origin(addr.ToStringAddrPort()), m_sock{std::move(socket)}, m_idle_since{Now<SteadySeconds>()} {}
 
     // Disable copies (should only be used as shared pointers)
     HTTPRemoteClient(const HTTPRemoteClient&) = delete;
     HTTPRemoteClient& operator=(const HTTPRemoteClient&) = delete;
 
-    HTTPServer::Id GetId() const { return m_id; }
-    const std::string& GetOrigin() const LIFETIMEBOUND { return m_origin; }
-    const CService& GetPeer() const LIFETIMEBOUND { return m_addr; }
+    const std::string& GetOrigin() const { return m_origin; }
+    const CService& GetPeer() const { return m_addr; }
     std::shared_ptr<Sock> GetSock() EXCLUSIVE_LOCKS_REQUIRED(!m_sock_mutex) { return WITH_LOCK(m_sock_mutex, return m_sock;); }
     bool ReadyToSend() const EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex) { return WITH_LOCK(m_send_mutex, return m_send_ready;); }
     bool ReceiveBufferEmpty() const { return m_recv_buffer.empty(); }
@@ -519,7 +508,7 @@ public:
     void Send(const HTTPResponse& res, std::span<const std::byte> reply_body, bool keep_alive) EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex, !m_sock_mutex);
     void Receive() EXCLUSIVE_LOCKS_REQUIRED(!m_sock_mutex);
 
-    bool ShouldDisconnect(std::chrono::time_point<MockableSteadyClock> now, std::chrono::seconds rpcservertimeout, bool disconnect_all) const;
+    bool MaybeDisconnect(std::chrono::time_point<SteadyClock> now, std::chrono::seconds rpcservertimeout, bool disconnect_all);
 
     /**
      * Try to read an HTTPRequest from a client's receive buffer.
@@ -540,17 +529,23 @@ public:
      * @returns nullptr after a complete request is moved to a worker thread,
      *          but before reading any new data from m_recv_buffer.
      */
-    const HTTPRequest* GetRequest() const LIFETIMEBOUND { return m_req.get(); }
+    const HTTPRequest* GetRequest() const { return m_req.get(); }
 
     //! Used for tests.
-    const std::string& GetRecvBuffer() const LIFETIMEBOUND { return m_recv_buffer; }
+    const std::string& GetRecvBuffer() const { return m_recv_buffer; }
 
 protected:
     //! Used for tests.
     std::string& MutateRecvBuffer() { return m_recv_buffer; }
 
 private:
-    std::unique_ptr<HTTPRequest> TryReadRequestInternal() EXCLUSIVE_LOCKS_REQUIRED(!m_send_mutex);
+    /**
+     * Try to read an HTTP request from the receive buffer.
+     * Updates HTTPRequest.m_state and drains buffer on error.
+     * @param[in]   req     A HTTPRequest to read into
+     * @throws std::runtime_error if request is unreadable or violates protocol
+     */
+    void ReadRequest(HTTPRequest& req);
 
     //! ID provided by HTTPServer upon connection and instantiation
     const HTTPServer::Id m_id;
@@ -582,7 +577,6 @@ private:
     std::atomic_bool m_req_busy{false};
 
     /**
-     * @name Response data
      * Response data destined for this client.
      * Written to by http worker threads, read and erased by HTTPServer I/O thread
      */
@@ -640,7 +634,7 @@ private:
     //! Timestamp of last send or receive activity, used for -rpcservertimeout.
     //! Due to optimistic sends it may be updated in either a worker thread or in the
     //! I/O thread. It is checked in the I/O thread to disconnect idle clients.
-    std::atomic<MockableSteadyClock::time_point> m_idle_since;
+    std::atomic<SteadySeconds> m_idle_since;
 };
 
 /** Initialize HTTP server.

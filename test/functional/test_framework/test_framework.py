@@ -16,7 +16,6 @@ import platform
 import pdb
 import random
 import re
-import runpy
 import shutil
 import subprocess
 import sys
@@ -233,10 +232,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         check_json_precision()
         export_env_build_path(self.config)
 
-        sanitizer_env = runpy.run_path(Path(self.config["environment"]["BUILDDIR"]) / "test" / "with_sanitizer_env.py", )["sanitizer_env"]
-        for name, value in sanitizer_env().items():
-            os.environ.setdefault(name, value)
-
         self.options.cachedir = os.path.abspath(self.options.cachedir)
 
         # Set up temp directory and start logging
@@ -405,7 +400,6 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.init_wallet(node=i)
 
     def init_wallet(self, *, node):
-        """Refer to the self.wallet_names docstring on how to use this"""
         wallet_name = self.default_wallet_name if self.wallet_names is None else self.wallet_names[node] if node < len(self.wallet_names) else False
         if wallet_name is not False:
             n = self.nodes[node]
@@ -452,9 +446,10 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             extra_confs = [[]] * num_nodes
         if extra_args is None:
             extra_args = [[]] * num_nodes
-        # Use noban permission to speed up tx relay / mempool sync. Don't use it if testing tx relay or timing.
+        # Whitelist peers to speed up tx relay / mempool sync. Don't use it if testing tx relay or timing.
         if self.noban_tx_relay:
-            extra_confs = [conf + ["whitelist=noban,in,out@127.0.0.1"] for conf in extra_confs]
+            for i in range(len(extra_args)):
+                extra_args[i] = extra_args[i] + ["-whitelist=noban,in,out@127.0.0.1"]
         if versions is None:
             versions = [None] * num_nodes
         bin_dirs = []
@@ -495,18 +490,18 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 # adjust conf for pre 17
                 test_node_i.replace_in_config([('[regtest]', '')])
 
-    def start_node(self, i, *args, wait_for_full_init=True, **kwargs):
+    def start_node(self, i, *args, **kwargs):
         """Start a bitcoind"""
 
         node = self.nodes[i]
 
         node.start(*args, **kwargs)
-        node.wait_for_rpc_connection(wait_for_full_init=wait_for_full_init)
+        node.wait_for_rpc_connection()
 
         if self.options.coveragedir is not None:
             coverage.write_all_rpc_commands(self.options.coveragedir, node._rpc)
 
-    def start_nodes(self, extra_args=None, *args, wait_for_full_init=True, **kwargs):
+    def start_nodes(self, extra_args=None, *args, **kwargs):
         """Start multiple bitcoinds"""
 
         if extra_args is None:
@@ -515,7 +510,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         for i, node in enumerate(self.nodes):
             node.start(extra_args[i], *args, **kwargs)
         for node in self.nodes:
-            node.wait_for_rpc_connection(wait_for_full_init=wait_for_full_init)
+            node.wait_for_rpc_connection()
 
         if self.options.coveragedir is not None:
             for node in self.nodes:
@@ -556,16 +551,16 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 node.stderr.close()
                 node.running = False
 
-    def restart_node(self, i, extra_args=None, clear_addrman=False, *, expected_stderr='', wait_for_full_init=True):
+    def restart_node(self, i, extra_args=None, clear_addrman=False, *, expected_stderr=''):
         """Stop and start a test node"""
         self.stop_node(i, expected_stderr=expected_stderr)
         if clear_addrman:
             peers_dat = self.nodes[i].chain_path / "peers.dat"
             os.remove(peers_dat)
             with self.nodes[i].assert_debug_log(expected_msgs=[f'Creating peers.dat because the file was not found ("{peers_dat}")']):
-                self.start_node(i, extra_args, wait_for_full_init=wait_for_full_init)
+                self.start_node(i, extra_args)
         else:
-            self.start_node(i, extra_args, wait_for_full_init=wait_for_full_init)
+            self.start_node(i, extra_args)
 
     def wait_for_node_exit(self, i, timeout):
         self.nodes[i].process.wait(timeout)
@@ -699,7 +694,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             utxos.append({"txid": send_res["txid"], "vout": vout})
         return utxos
 
-    def sync_blocks(self, nodes=None, *, wait=0.05, timeout=60):
+    def sync_blocks(self, nodes=None, wait=1, timeout=60):
         """
         Wait until everybody has the same tip.
         sync_blocks needs to be called with an rpc_connections set that has least
@@ -721,7 +716,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             "".join("\n  {!r}".format(b) for b in best_hash),
         ))
 
-    def sync_mempools(self, nodes=None, *, wait=0.05, timeout=60, flush_scheduler=True):
+    def sync_mempools(self, nodes=None, wait=1, timeout=60, flush_scheduler=True):
         """
         Wait until everybody has the same transactions in their memory
         pools
@@ -744,19 +739,11 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             "".join("\n  {!r}".format(m) for m in pool),
         ))
 
-    def wait_for_index_sync(self, nodes=None, **kwargs):
-        """Wait for every enabled index to reach each node's chain tip."""
-        nodes = nodes or self.nodes
-
-        for node in nodes:
-            node.wait_for_index_sync(**kwargs)
-
     def sync_all(self, nodes=None):
         self.sync_blocks(nodes)
         self.sync_mempools(nodes)
-        self.wait_for_index_sync(nodes)
 
-    def wait_until(self, test_function, *, timeout=60, check_interval=0.05):
+    def wait_until(self, test_function, timeout=60, check_interval=0.05):
         return wait_until_helper_internal(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor, check_interval=check_interval)
 
     def fill_node_addrman(self, *, node_index, address_types_to_add):
@@ -974,7 +961,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.stop_nodes()
             self.nodes = []
 
-            cache_path = cache_node.chain_path
+            cache_path = cache_node_dir / self.chain
 
             (cache_path / "wallets").rmdir()  # Do not cache empty wallets dir
             shutil.rmtree(cache_path / "fees")  # Do not cache fees dat files

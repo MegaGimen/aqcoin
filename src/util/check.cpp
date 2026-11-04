@@ -24,11 +24,6 @@ std::string StrFormatInternalBug(std::string_view msg, const std::source_locatio
                      CLIENT_NAME, FormatFullVersion(), CLIENT_BUGREPORT);
 }
 
-std::string StrFormatFailedCheck(std::string_view assertion)
-{
-    return strprintf("`%s` check failed", assertion);
-}
-
 NonFatalCheckError::NonFatalCheckError(std::string_view msg, const std::source_location& loc)
     : std::runtime_error{StrFormatInternalBug(msg, loc)}
 {
@@ -36,22 +31,14 @@ NonFatalCheckError::NonFatalCheckError(std::string_view msg, const std::source_l
 
 bool g_detail_test_only_CheckFailuresAreExceptionsNotAborts{false};
 
-void internal_abort_helper(const std::source_location& loc, std::string_view error_msg)
+void assertion_fail(const std::source_location& loc, std::string_view assertion)
 {
     if (g_detail_test_only_CheckFailuresAreExceptionsNotAborts) {
-        throw NonFatalCheckError{error_msg, loc};
+        throw NonFatalCheckError{assertion, loc};
     }
-    auto str = strprintf("%s:%s %s: %s.\n", loc.file_name(), loc.line(), loc.function_name(), error_msg);
+    auto str = strprintf("%s:%s %s: Assertion `%s' failed.\n", loc.file_name(), loc.line(), loc.function_name(), assertion);
     fwrite(str.data(), 1, str.size(), stderr);
     std::abort();
-}
-
-void internal_non_fatal_helper(const std::source_location& loc, std::string_view error_msg)
-{
-    if constexpr (G_ABORT_ON_FAILED_ASSUME) {
-        internal_abort_helper(loc, error_msg);
-    }
-    throw NonFatalCheckError{error_msg, loc};
 }
 
 std::atomic<bool> g_enable_dynamic_fuzz_determinism{false};

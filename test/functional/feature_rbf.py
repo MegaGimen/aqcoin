@@ -20,10 +20,9 @@ from test_framework.util import (
 )
 from test_framework.wallet import MiniWallet
 from test_framework.address import ADDRESS_BCRT1_UNSPENDABLE
-from test_framework.mempool_util import (
-    DEFAULT_CLUSTER_LIMIT,
-    MAX_REPLACEMENT_CANDIDATES,
-)
+from test_framework.mempool_util import DEFAULT_CLUSTER_LIMIT
+
+MAX_REPLACEMENT_LIMIT = 100
 
 class ReplaceByFeeTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -350,20 +349,20 @@ class ReplaceByFeeTest(BitcoinTestFramework):
 
     def test_too_many_replacements(self):
         """Replacements that conflict with too many clusters are rejected"""
-        # Try directly replacing transactions in more than MAX_REPLACEMENT_CANDIDATES
+        # Try directly replacing transactions in more than MAX_REPLACEMENT_LIMIT
         # distinct clusters
 
         # Start by creating a single transaction with many outputs
         initial_nValue = 10 * COIN
         utxo = self.make_utxo(self.nodes[0], initial_nValue)
         fee = int(0.0001 * COIN)
-        split_value = int((initial_nValue - fee) / (MAX_REPLACEMENT_CANDIDATES + 1))
+        split_value = int((initial_nValue - fee) / (MAX_REPLACEMENT_LIMIT + 1))
 
         splitting_tx_utxos = self.wallet.send_self_transfer_multi(
             from_node=self.nodes[0],
             utxos_to_spend=[utxo],
             sequence=0,
-            num_outputs=MAX_REPLACEMENT_CANDIDATES + 1,
+            num_outputs=MAX_REPLACEMENT_LIMIT + 1,
             amount_per_output=split_value,
         )["new_utxos"]
 
@@ -381,7 +380,7 @@ class ReplaceByFeeTest(BitcoinTestFramework):
         # Now create doublespend of the whole lot; should fail.
         # Need a big enough fee to cover all spending transactions and have
         # a higher fee rate
-        double_spend_value = (split_value - 100 * fee) * (MAX_REPLACEMENT_CANDIDATES + 1)
+        double_spend_value = (split_value - 100 * fee) * (MAX_REPLACEMENT_LIMIT + 1)
         double_tx = self.wallet.create_self_transfer_multi(
             utxos_to_spend=splitting_tx_utxos,
             sequence=0,
@@ -391,7 +390,7 @@ class ReplaceByFeeTest(BitcoinTestFramework):
 
         # This will raise an exception
         reject_reason = "too many potential replacements"
-        reject_details = f"{reject_reason}, rejecting replacement {double_tx.txid_hex}; too many conflicting clusters ({MAX_REPLACEMENT_CANDIDATES + 1} > {MAX_REPLACEMENT_CANDIDATES})"
+        reject_details = f"{reject_reason}, rejecting replacement {double_tx.txid_hex}; too many conflicting clusters ({MAX_REPLACEMENT_LIMIT + 1} > {MAX_REPLACEMENT_LIMIT})"
         res = self.nodes[0].testmempoolaccept(rawtxs=[double_tx_hex])[0]
         assert_equal(res["reject-reason"], reject_reason)
         assert_equal(res["reject-details"], reject_details)

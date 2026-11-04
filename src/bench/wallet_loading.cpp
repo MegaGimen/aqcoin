@@ -18,8 +18,6 @@
 #include <wallet/wallet.h>
 #include <wallet/walletutil.h>
 
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -64,7 +62,7 @@ static void WalletLoadingDescriptors(benchmark::Bench& bench)
     options.require_create = false;
     options.require_existing = true;
 
-    bench.epochs(std::min(bench.epochs(), size_t{5}))
+    bench.epochs(5)
         .setup([&] {
             TestUnloadWallet(std::move(wallet));
             database = MakeWalletDatabase("", options, status, error);

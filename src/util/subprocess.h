@@ -1088,7 +1088,7 @@ inline void Popen::execute_process() noexcept(false)
 
   for (auto arg : this->vargs_) {
     if (!first_arg) {
-      command_line += ' ';
+      command_line += " ";
     } else {
       first_arg = false;
     }
@@ -1096,6 +1096,9 @@ inline void Popen::execute_process() noexcept(false)
     util::quote_argument(argument, command_line, /*force=*/false);
   }
 
+  // CreateProcessA can modify szCmdLine so we allocate needed memory
+  char *szCmdline = new char[command_line.size() + 1];
+  strcpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
   PROCESS_INFORMATION piProcInfo;
   STARTUPINFOA siStartInfo;
   BOOL bSuccess = FALSE;
@@ -1118,7 +1121,7 @@ inline void Popen::execute_process() noexcept(false)
 
   // Create the child process.
   bSuccess = CreateProcessA(NULL,
-                            command_line.data(), // command line
+                            szCmdline,    // command line
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
                             TRUE,         // handles are inherited
@@ -1213,7 +1216,7 @@ inline void Popen::execute_process() noexcept(false)
         // Throw whatever information we have about child failure
         throw CalledProcessError(err_buf, retcode);
       }
-    } catch (std::exception&) {
+    } catch (std::exception& exp) {
       stream_.cleanup_fds();
       throw;
     }

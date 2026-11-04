@@ -73,7 +73,6 @@ namespace {
 
 // don't add private key handling cmd's to the history
 const QStringList historyFilter = QStringList()
-    << "addhdkey"
     << "createwallet"
     << "createwalletdescriptor"
     << "migratewallet"
@@ -190,7 +189,7 @@ bool RPCConsole::RPCParseCommandLine(interfaces::Node* node, std::string &strRes
 
     std::string strCommandTerminated = strCommand;
     if (strCommandTerminated.back() != '\n')
-        strCommandTerminated += '\n';
+        strCommandTerminated += "\n";
     for (chpos = 0; chpos < strCommandTerminated.size(); ++chpos)
     {
         char ch = strCommandTerminated[chpos];

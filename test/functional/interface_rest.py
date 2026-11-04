@@ -24,6 +24,7 @@ from test_framework.util import (
     assert_greater_than,
     assert_greater_than_or_equal,
     assert_not_equal,
+    sync_txindex,
 )
 from test_framework.wallet import (
     MiniWallet,
@@ -50,12 +51,12 @@ def filter_output_indices_by_value(vouts, value):
         if vout['value'] == value:
             yield vout['n']
 
-
-class RESTTest(BitcoinTestFramework):
+class RESTTest (BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.extra_args = [["-rest", "-blockfilterindex=1", "-txindex"], []]
-        self.noban_tx_relay = True  # faster tx relay
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
 
     def test_rest_request(
             self,
@@ -76,7 +77,7 @@ class RESTTest(BitcoinTestFramework):
             else:
                 rest_uri += f'?{urllib.parse.urlencode(query_params)}'
 
-        conn = http.client.HTTPConnection(self.url.hostname, self.url.port, timeout=self.rpc_timeout)
+        conn = http.client.HTTPConnection(self.url.hostname, self.url.port)
         self.log.debug(f'{http_method} {rest_uri} {body}')
         if http_method == 'GET':
             conn.request('GET', rest_uri)
@@ -302,6 +303,10 @@ class RESTTest(BitcoinTestFramework):
 
         # See if we can get 5 headers in one response
         self.generate(self.nodes[1], 5)
+        expected_filter = {
+            'basic block filter index': {'synced': True, 'best_block_height': 208},
+        }
+        self.wait_until(lambda: self.nodes[0].getindexinfo("basic block filter index") == expected_filter)
         json_obj = self.test_rest_request(f"/headers/{bb_hash}", query_params={"count": 5})
         assert_equal(len(json_obj), 5)  # now we should have 5 header objects
         json_obj = self.test_rest_request(f"/blockfilterheaders/basic/{bb_hash}", query_params={"count": 5})
@@ -446,12 +451,14 @@ class RESTTest(BitcoinTestFramework):
 
             for i, tx in enumerate(block["tx"]):
                 prevouts = [txin["prevout"] for txin in tx["vin"] if "coinbase" not in txin]
-                # compare binary REST format with `getblock` JSON output (coinbase tx has no prevouts)
+                # compare with `getblock` JSON output (coinbase tx has no prevouts)
                 actual = [(txout.scriptPubKey.hex(), Decimal(txout.nValue) / COIN) for txout in spent[i]]
                 expected = [(p["scriptPubKey"]["hex"], p["value"]) for p in prevouts]
                 assert_equal(expected, actual)
-                # also compare the JSON REST format to the getblock verbosity 3 RPC output
-                assert_equal(spent_json[i], prevouts)
+                # also compare JSON format
+                actual = [(prevout["scriptPubKey"], prevout["value"]) for prevout in spent_json[i]]
+                expected = [(p["scriptPubKey"], p["value"]) for p in prevouts]
+                assert_equal(expected, actual)
 
         self.log.info("Test the /blockpart URI")
 
@@ -589,6 +596,7 @@ class RESTTest(BitcoinTestFramework):
         assert_cache_control(f"/tx/{mempool_txid}", no_store, req_type=ReqType.HEX)
 
         self.generate(self.nodes[0], 1)
+        sync_txindex(self, self.nodes[0])
 
         self.log.info("Test Cache-Control response behavior across a newly mined block")
         assert_equal(immutable_block, assert_cache_control(f"/block/{blockhash}", immutable, req_type=ReqType.BIN))
@@ -632,14 +640,6 @@ class RESTTest(BitcoinTestFramework):
         assert_cache_control("/does-not-exist", no_store, status=404, req_type=None)
         assert_cache_control("/mempool/not-a-valid-path", no_store, status=400)
         assert_cache_control(f"/deploymentinfo/{non_existing_blockhash}", no_store, status=400)
-
-        self.log.info("Test /spenttxouts for a block without undo data")
-        node = self.nodes[0]
-        stale = self.generateblock(node, self.wallet.get_address(), [], submit=False, sync_fun=self.no_op)
-        self.generate(node, 1)
-        assert_equal(node.submitblock(stale["hex"]), "inconclusive")
-        with node.assert_debug_log(expected_msgs=[], unexpected_msgs=["OpenUndoFile failed"]):
-            self.test_rest_request(f"/spenttxouts/{stale['hash']}", status=404, ret_type=RetType.OBJ)
 
 if __name__ == '__main__':
     RESTTest(__file__).main()

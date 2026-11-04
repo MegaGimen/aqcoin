@@ -108,12 +108,12 @@ CConnman& EnsureConnman(const NodeContext& node)
     return *node.connman;
 }
 
-node::BlockTemplateManager& EnsureBlockTemplateManager(const NodeContext& node)
+interfaces::Mining& EnsureMining(const NodeContext& node)
 {
-    if (!node.block_template_manager) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block template manager not found");
+    if (!node.mining) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Node miner not found");
     }
-    return *node.block_template_manager;
+    return *node.mining;
 }
 
 PeerManager& EnsurePeerman(const NodeContext& node)

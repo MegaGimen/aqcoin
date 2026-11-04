@@ -56,7 +56,6 @@ class WalletTaprootTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.setup_clean_chain = True
-        self.wallet_names = []
         self.extra_args = [['-keypool=100'], ['-keypool=100']]
 
     def skip_test_if_missing_module(self):
@@ -64,6 +63,9 @@ class WalletTaprootTest(BitcoinTestFramework):
 
     def setup_network(self):
         self.setup_nodes()
+
+    def init_wallet(self, *, node):
+        pass
 
     @staticmethod
     def make_desc(pattern, privmap, keys, pub_only = False):

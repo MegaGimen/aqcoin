@@ -2,6 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <bitcoin-build-config.h> // IWYU pragma: keep
+
 #include <qt/clientmodel.h>
 
 #include <qt/bantablemodel.h>
@@ -127,6 +129,15 @@ std::map<CNetAddr, LocalServiceInfo> ClientModel::getNetLocalAddresses() const
     return m_node.getNetLocalAddresses();
 }
 
+
+int ClientModel::getNumBlocks() const
+{
+    if (m_cached_num_blocks == -1) {
+        m_cached_num_blocks = m_node.getNumBlocks();
+    }
+    return m_cached_num_blocks;
+}
+
 uint256 ClientModel::getBestBlockHash()
 {
     uint256 tip{WITH_LOCK(m_cached_tip_mutex, return m_cached_tip_blocks)};
@@ -192,6 +203,11 @@ QString ClientModel::formatSubVersion() const
     return QString::fromStdString(strSubVersion);
 }
 
+bool ClientModel::isReleaseVersion() const
+{
+    return CLIENT_VERSION_IS_RELEASE;
+}
+
 QString ClientModel::formatClientStartupTime() const
 {
     return QDateTime::currentDateTime().addSecs(-TicksSeconds(GetUptime())).toString();
@@ -214,6 +230,7 @@ void ClientModel::TipChanged(SynchronizationState sync_state, interfaces::BlockT
         cachedBestHeaderHeight = tip.block_height;
         cachedBestHeaderTime = tip.block_time;
     } else if (synctype == SyncType::BLOCK_SYNC) {
+        m_cached_num_blocks = tip.block_height;
         WITH_LOCK(m_cached_tip_mutex, m_cached_tip_blocks = tip.block_hash;);
     }
 

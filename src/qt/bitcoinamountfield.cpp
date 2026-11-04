@@ -85,6 +85,11 @@ public:
         m_min_amount = value;
     }
 
+    void SetMaxValue(const CAmount& value)
+    {
+        m_max_amount = value;
+    }
+
     void stepBy(int steps) override
     {
         bool valid = false;
@@ -304,6 +309,16 @@ void BitcoinAmountField::SetAllowEmpty(bool allow)
 void BitcoinAmountField::SetMinValue(const CAmount& value)
 {
     amount->SetMinValue(value);
+}
+
+void BitcoinAmountField::SetMaxValue(const CAmount& value)
+{
+    amount->SetMaxValue(value);
+}
+
+void BitcoinAmountField::setReadOnly(bool fReadOnly)
+{
+    amount->setReadOnly(fReadOnly);
 }
 
 void BitcoinAmountField::unitChanged(int idx)

@@ -25,42 +25,41 @@ The following examples assume that the build directory is named `build`.
 
 See [/doc/fuzzing.md](/doc/fuzzing.md)
 
-## Functional tests
+### Functional tests
 
-### Dependencies and prerequisites
+#### Dependencies and prerequisites
 
-The functional tests require Python to be installed. For the minimum required Python version, refer to [Dependencies](/doc/dependencies.md#build-1).
+The ZMQ functional test requires a python ZMQ library. To install it:
 
-Some tests require optional dependencies: Python modules and system utilities.
-They can be installed with any suitable tool, like the system package manager, `pip` in a virtual environment, or `uv`.
+- on Unix, run `sudo apt-get install python3-zmq`
+- on mac OS, run `pip3 install pyzmq`
 
-If an optional dependency is not installed, the corresponding tests will be skipped rather than failed.
+The IPC functional test requires a python IPC library. `pip3 install pycapnp` may work, but if not, install it from source:
 
-| Package manager | Python | sqlite3<br>(wallet tests) | zmq<br>(ZMQ tests) | capnp<br>(IPC tests) | lsof <sup><a href="#note1">[1]</a></sup><br>(network tests) | plyvel<br>(DB corruption tests) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **pip** | n/a | n/a | `pyzmq` | `pycapnp` | n/a | `plyvel` |
-| **Debian/Ubuntu**<br>(`apt`) | `python3` | included | `python3-zmq` | n/a | n/a | `python3-plyvel` |
-| **macOS**<br>(`brew`) | `python3` | included | n/a | n/a | n/a | n/a |
-| **Windows**<br>(`winget`) | `python3` | included | n/a | n/a | n/a | n/a |
-| **FreeBSD**<br>(`pkg`) | `python3` | `databases/py-sqlite3` | `net/py-pyzmq` | n/a | `sysutils/lsof` | n/a |
-| **NetBSD**<br>(`pkgin`) | `python313` | included | `py313-zmq` | n/a | `lsof` | n/a |
-| **OpenBSD**<br>(`pkg_add`) | `python` | included | `py3-zmq` | n/a | n/a | n/a |
+```sh
+git clone -b v2.2.1 https://github.com/capnproto/pycapnp
+pip3 install ./pycapnp
+```
 
-<a id="note1"></a>1. Only used on non-Linux systems. macOS ships `lsof` in the base system. OpenBSD and Windows do not provide it, and the tests requiring it are always skipped there.
+If that does not work, try adding `-C force-bundled-libcapnp=True` to the `pip` command.
+Depending on the system, it may be necessary to install and run in a venv:
 
-#### UTF-8 mode
+```sh
+python -m venv venv
+git clone -b v2.2.1 https://github.com/capnproto/pycapnp
+venv/bin/pip3 install ./pycapnp -C force-bundled-libcapnp=True
+venv/bin/python3 build/test/functional/interface_ipc.py
+```
 
 The functional tests assume Python UTF-8 Mode, which is the default on most
 systems.
+On Windows the `PYTHONUTF8` environment variable must be set to 1:
 
-On Windows, when using Python < 3.15, the `PYTHONUTF8` environment variable must be set to 1.
-For example, in PowerShell:
-
-```powershell
-$env:PYTHONUTF8 = 1
+```cmd
+set PYTHONUTF8=1
 ```
 
-### Running the tests
+#### Running the tests
 
 Individual tests can be run by directly calling the test script, e.g.:
 
@@ -129,7 +128,7 @@ how many jobs to run, append `--jobs=n`
 The individual tests and the test_runner harness have many command-line
 options. Run `build/test/functional/test_runner.py -h` to see them all.
 
-### Speed up test runs with a RAM disk
+#### Speed up test runs with a RAM disk
 
 If you have available RAM on your system you can create a RAM disk to use as the `cache` and `tmp` directories for the functional tests in order to speed them up.
 Speed-up amount varies on each system (and according to your RAM speed and other variables), but a 2-3x speed-up is not uncommon.
@@ -180,9 +179,9 @@ To unmount:
 umount /Volumes/ramdisk
 ```
 
-### Troubleshooting and debugging test failures
+#### Troubleshooting and debugging test failures
 
-#### Resource contention
+##### Resource contention
 
 The P2P and RPC ports used by the bitcoind nodes-under-test are chosen to make
 conflicts with other processes unlikely. However, if there is another bitcoind
@@ -210,7 +209,7 @@ pkill -9 bitcoind
 ```
 
 
-#### Data directory cache
+##### Data directory cache
 
 A pre-mined blockchain with 200 blocks is generated the first time a
 functional test is run and is stored in build/test/cache. This speeds up
@@ -224,7 +223,7 @@ rm -rf build/test/cache
 killall bitcoind
 ```
 
-#### Test logging
+##### Test logging
 
 The tests contain logging at five different levels (DEBUG, INFO, WARNING, ERROR
 and CRITICAL). From within your functional tests you can log to these different
@@ -269,7 +268,7 @@ By default, the test data directory will be deleted after a successful run.
 Use `--nocleanup` to leave the test data directory intact. The test data
 directory is never deleted after a failed test.
 
-#### Attaching a debugger
+##### Attaching a debugger
 
 A python debugger can be attached to tests at any point. Just add the line:
 
@@ -319,7 +318,7 @@ Often while debugging RPC calls in functional tests, the test might time out bef
 process can return a response. Use `--timeout-factor 0` to disable all RPC timeouts for that particular
 functional test. Ex: `build/test/functional/wallet_hd.py --timeout-factor 0`.
 
-## Lint tests
+### Lint tests
 
 See the README in [test/lint](/test/lint).
 

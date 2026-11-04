@@ -42,7 +42,6 @@ from .util import (
     p2p_port,
     tor_port,
 )
-from .signet import SIGNET_DEFAULT_CHALLENGE, message_start
 
 BITCOIND_PROC_WAIT_TIMEOUT = 60
 # The size of the blocks xor key
@@ -149,8 +148,6 @@ class TestNode():
             "-debugexclude=rand",
             "-uacomment=testnode%d" % i,  # required for subversion uniqueness across peers
         ]
-        if use_gui:
-            self.args.append("-lang=nl_NL")  # Set language to try to trigger translation bugs
         if uses_wallet is not None and not uses_wallet:
             self.args.append("-disablewallet")
 
@@ -279,7 +276,7 @@ class TestNode():
         # Delete any existing cookie file -- if such a file exists (eg due to
         # unclean shutdown), it will get overwritten anyway by bitcoind, and
         # potentially interfere with our attempt to authenticate
-        delete_cookie_file(self.datadir_path, self.chain_dir)
+        delete_cookie_file(self.datadir_path, self.chain)
 
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
@@ -301,7 +298,7 @@ class TestNode():
                 # on stderr, which the test framework treats as a failure.
                 # Fall back to Qt's poll-based event dispatcher instead.
                 subp_env.setdefault("QT_NO_GLIB", "1")
-            subp_env.setdefault("LC_ALL", "C.UTF-8")  # Qt prints a warning to stderr if the locale is not UTF-8
+            subp_env.setdefault("LC_ALL", "nl_NL.UTF-8") # Set language to try to trigger translation bugs
             if sys.platform.startswith("linux") and "XDG_RUNTIME_DIR" not in subp_env:
                 # Qt prints warnings to stderr when XDG_RUNTIME_DIR is unset or has wrong
                 # permissions (e.g. in CI environments without a desktop session), which
@@ -336,7 +333,7 @@ class TestNode():
             else:
                 host = self.rpchost
         if mode == RPCConnectionType.AUTHPROXY:
-            rpc_u, rpc_p = get_auth_cookie(self.datadir_path, self.chain_dir)
+            rpc_u, rpc_p = get_auth_cookie(self.datadir_path, self.chain)
             url = f"http://{rpc_u}:{rpc_p}@{host}:{port}"
             proxy = AuthServiceProxy(url, timeout=int(client_timeout))
             coverage_logfile = coverage.get_filename(self.coverage_dir, self.index) if self.coverage_dir else None
@@ -344,19 +341,17 @@ class TestNode():
             rpc.auth_service_proxy_instance.reuse_http_connections = self.reuse_http_connections
             return rpc
         else:  # mode==CLI
-            extra_args = [arg for arg in self.extra_args if arg.startswith("-signetchallenge")]
             return TestNodeCLI(self.binaries)(
                 f"-datadir={self.datadir_path}",
                 f"-rpcclienttimeout={client_timeout}",
                 f"-rpcconnect={host}",
                 f"-rpcport={port}",
-                *extra_args
             )
 
-    def wait_for_rpc_connection(self, *, wait_for_full_init=True):
+    def wait_for_rpc_connection(self, *, wait_for_import=True):
         """Sets up an RPC connection to the bitcoind process. Returns False if unable to connect."""
-        # Poll at a rate of twenty times per second
-        poll_per_s = 20
+        # Poll at a rate of four times per second
+        poll_per_s = 4
 
         suppressed_errors = collections.defaultdict(int)
         latest_error = None
@@ -364,8 +359,7 @@ class TestNode():
             suppressed_errors[category] += 1
             return (category, repr(e))
 
-        stop_time = time.monotonic() + self.rpc_timeout
-        while time.monotonic() <= stop_time:
+        for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
                 # Attach abrupt shutdown error/s to the exception message
                 self.stderr.seek(0)
@@ -378,13 +372,12 @@ class TestNode():
                 rpc = self.create_new_rpc_connection(mode="AUTHPROXY")
                 rpc.getblockcount()
                 # If the call to getblockcount() succeeds then the RPC connection is up
-                if self.version_is_at_least(190000) and wait_for_full_init:
+                if self.version_is_at_least(190000) and wait_for_import:
                     # getmempoolinfo.loaded is available since commit
                     # bb8ae2c (version 0.19.0)
                     self.wait_until(lambda: rpc.getmempoolinfo()['loaded'])
-                    self.wait_for_index_sync(rpc=rpc)
                     # Wait for the node to finish reindex, block import, and
-                    # loading the mempool and indexes. Usually importing happens fast or
+                    # loading the mempool. Usually importing happens fast or
                     # even "immediate" when the node is started. However, there
                     # is no guarantee and sometimes ImportBlocks might finish
                     # later. This is going to cause intermittent test failures,
@@ -456,7 +449,7 @@ class TestNode():
         poll_per_s = 4
         for _ in range(poll_per_s * self.rpc_timeout):
             try:
-                get_auth_cookie(self.datadir_path, self.chain_dir)
+                get_auth_cookie(self.datadir_path, self.chain)
                 self.log.debug("Cookie credentials successfully retrieved")
                 return
             except ValueError:  # cookie file not found and no rpcuser or rpcpassword; bitcoind is still starting
@@ -588,23 +581,7 @@ class TestNode():
 
     @property
     def chain_path(self) -> Path:
-        return self.datadir_path / self.chain_dir
-
-    @property
-    def chain_dir(self) -> str:
-        if self.chain == "main":
-            return ""
-        if self.chain != "signet":
-            return self.chain
-        for arg in self.extra_args:
-            if not arg.startswith("-signetchallenge"):
-                continue
-            signetchallenge = arg.split('=')[1]
-            if signetchallenge.lower() == SIGNET_DEFAULT_CHALLENGE:
-                return self.chain
-            suffix = message_start(signetchallenge)
-            return f"signet_{suffix}"
-        return self.chain
+        return self.datadir_path / self.chain
 
     @property
     def debug_log_path(self) -> Path:
@@ -826,7 +803,7 @@ class TestNode():
 
     def add_outbound_p2p_connection(self, p2p_conn, *, wait_for_verack=True, wait_for_disconnect=False, p2p_idx, connection_type="outbound-full-relay", supports_v2_p2p=None, advertise_v2_p2p=None, **kwargs):
         """Add an outbound p2p connection from node. Must be an
-        "outbound-full-relay", "block-relay-only", "addr-fetch", "feeler" or "manual" connection.
+        "outbound-full-relay", "block-relay-only", "addr-fetch" or "feeler" connection.
 
         This method adds the p2p connection to the self.p2ps list and returns
         the connection to the caller.
@@ -913,22 +890,8 @@ class TestNode():
         self.mocktime += seconds
         self.setmocktime(self.mocktime)
 
-    def wait_until(self, test_function, *, timeout=60, check_interval=0.05):
+    def wait_until(self, test_function, timeout=60, check_interval=0.05):
         return wait_until_helper_internal(test_function, timeout=timeout, timeout_factor=self.timeout_factor, check_interval=check_interval)
-
-    def wait_for_index_sync(self, *, rpc=None, **kwargs):
-        """Wait for every enabled index to reach this node's chain tip."""
-        if not self.version_is_at_least(210000):
-            return  # getindexinfo is not available in earlier versions
-
-        rpc = rpc or self
-
-        def indexes_are_synced():
-            indexes = rpc.getindexinfo().values()
-            height = rpc.getblockcount()
-            return all(index["synced"] and index["best_block_height"] == height for index in indexes)
-
-        self.wait_until(indexes_are_synced, **kwargs)
 
 class TestNodeCLIAttr:
     def __init__(self, cli, command):

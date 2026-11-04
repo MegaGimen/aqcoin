@@ -28,7 +28,9 @@ class EphemeralDustTest(BitcoinTestFramework):
     def set_test_params(self):
         # Mempools should match via 1P1C p2p relay
         self.num_nodes = 2
-        self.noban_tx_relay = True  # faster tx relay
+
+        # Don't test trickling logic
+        self.noban_tx_relay = True
 
     def add_output_to_create_multi_result(self, result, output_value=0):
         """ Add output without changing absolute tx fee

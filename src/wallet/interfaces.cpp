@@ -10,7 +10,6 @@
 #include <interfaces/handler.h>
 #include <node/types.h>
 #include <primitives/transaction.h>
-#include <pubkey.h>
 #include <rpc/server.h>
 #include <scheduler.h>
 #include <support/allocators/secure.h>
@@ -24,16 +23,13 @@
 #include <wallet/export.h>
 #include <wallet/feebumper.h>
 #include <wallet/fees.h>
-#include <wallet/imports.h>
 #include <wallet/load.h>
 #include <wallet/receive.h>
 #include <wallet/rpc/wallet.h>
 #include <wallet/spend.h>
-#include <wallet/scan.h>
 #include <wallet/wallet.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -85,8 +81,6 @@ WalletTx MakeWalletTx(CWallet& wallet, const CWalletTx& wtx)
     result.message = wtx.m_message;
     result.comment = wtx.m_comment;
     result.comment_to = wtx.m_comment_to;
-    result.replaces_txid = wtx.m_replaces_txid;
-    result.replaced_by_txid = wtx.m_replaced_by_txid;
     result.is_coinbase = wtx.IsCoinBase();
     return result;
 }
@@ -149,14 +143,14 @@ public:
     }
     bool isCrypted() override { return m_wallet->HasEncryptionKeys(); }
     bool lock() override { return m_wallet->Lock(); }
-    util::Expected<void, WalletError> unlock(const SecureString& wallet_passphrase) override { return m_wallet->Unlock(wallet_passphrase); }
+    bool unlock(const SecureString& wallet_passphrase) override { return m_wallet->Unlock(wallet_passphrase); }
     bool isLocked() override { return m_wallet->IsLocked(); }
-    util::Expected<void, WalletError> changeWalletPassphrase(const SecureString& old_wallet_passphrase,
-                                                             const SecureString& new_wallet_passphrase) override
+    bool changeWalletPassphrase(const SecureString& old_wallet_passphrase,
+        const SecureString& new_wallet_passphrase) override
     {
         return m_wallet->ChangeWalletPassphrase(old_wallet_passphrase, new_wallet_passphrase);
     }
-    void abortRescan() override { m_wallet->Scanner().Abort(); }
+    void abortRescan() override { m_wallet->AbortRescan(); }
     bool backupWallet(const std::string& filename) override { return m_wallet->BackupWallet(filename); }
     std::string getWalletName() override { return m_wallet->GetName(); }
     util::Result<CTxDestination> getNewDestination(const OutputType type, const std::string& label) override
@@ -172,11 +166,6 @@ public:
         }
         return false;
     }
-    util::Expected<CExtPubKey, wallet::WalletError> addHDKey(const std::optional<CExtKey>& key) override
-    {
-        return m_wallet->AddHDKey(key);
-    }
-
     SigningResult signMessage(const std::string& message, const PKHash& pkhash, std::string& str_sig) override
     {
         return m_wallet->SignMessage(message, pkhash, str_sig);
@@ -383,10 +372,6 @@ public:
     {
         return m_wallet->FillPSBT(psbtx, options, complete, n_signed);
     }
-    std::vector<wallet::ImportResult> importDescriptors(std::vector<wallet::ImportDescriptorRequest>& requests) override
-    {
-        return wallet::ProcessDescriptorsImport(*m_wallet, requests);
-    }
     WalletBalances getBalances() override
     {
         const auto bal = GetBalance(*m_wallet);
@@ -502,7 +487,7 @@ public:
         return spk_man != nullptr;
     }
     OutputType getDefaultAddressType() override { return m_wallet->m_default_address_type; }
-    CAmount getMaxTxFee() override { return m_wallet->m_max_tx_fee; }
+    CAmount getDefaultMaxTxFee() override { return m_wallet->m_default_max_tx_fee; }
     void remove() override
     {
         RemoveWallet(m_context, m_wallet, /*load_on_start=*/false);

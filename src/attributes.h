@@ -7,7 +7,11 @@
 #define BITCOIN_ATTRIBUTES_H
 
 #if defined(__clang__)
-#  define LIFETIMEBOUND [[clang::lifetimebound]]
+#  if __has_attribute(lifetimebound)
+#    define LIFETIMEBOUND [[clang::lifetimebound]]
+#  else
+#    define LIFETIMEBOUND
+#  endif
 #else
 #  define LIFETIMEBOUND
 #endif

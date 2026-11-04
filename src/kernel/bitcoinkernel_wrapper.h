@@ -24,7 +24,7 @@
 namespace btck {
 
 enum class LogCategory : btck_LogCategory {
-    NONE = btck_LogCategory_NONE,
+    ALL = btck_LogCategory_ALL,
     BENCH = btck_LogCategory_BENCH,
     BLOCKSTORAGE = btck_LogCategory_BLOCKSTORAGE,
     COINDB = btck_LogCategory_COINDB,
@@ -34,50 +34,14 @@ enum class LogCategory : btck_LogCategory {
     RAND = btck_LogCategory_RAND,
     REINDEX = btck_LogCategory_REINDEX,
     VALIDATION = btck_LogCategory_VALIDATION,
-    KERNEL = btck_LogCategory_KERNEL,
-    TXPACKAGES = btck_LogCategory_TXPACKAGES,
-    LOCK = btck_LogCategory_LOCK,
+    KERNEL = btck_LogCategory_KERNEL
 };
 
 enum class LogLevel : btck_LogLevel {
     TRACE_LEVEL = btck_LogLevel_TRACE,
     DEBUG_LEVEL = btck_LogLevel_DEBUG,
-    INFO_LEVEL = btck_LogLevel_INFO,
-    WARNING_LEVEL = btck_LogLevel_WARNING,
-    ERROR_LEVEL = btck_LogLevel_ERROR,
+    INFO_LEVEL = btck_LogLevel_INFO
 };
-
-constexpr std::string_view Name(LogLevel level) noexcept
-{
-    switch (level) {
-    case LogLevel::TRACE_LEVEL: return "trace";
-    case LogLevel::DEBUG_LEVEL: return "debug";
-    case LogLevel::INFO_LEVEL: return "info";
-    case LogLevel::WARNING_LEVEL: return "warning";
-    case LogLevel::ERROR_LEVEL: return "error";
-    } // no default case, so the compiler can warn about missing cases
-    return "unknown";
-}
-
-constexpr std::string_view Name(LogCategory category) noexcept
-{
-    switch (category) {
-    case LogCategory::NONE: return "none";
-    case LogCategory::BENCH: return "bench";
-    case LogCategory::BLOCKSTORAGE: return "blockstorage";
-    case LogCategory::COINDB: return "coindb";
-    case LogCategory::LEVELDB: return "leveldb";
-    case LogCategory::MEMPOOL: return "mempool";
-    case LogCategory::PRUNE: return "prune";
-    case LogCategory::RAND: return "rand";
-    case LogCategory::REINDEX: return "reindex";
-    case LogCategory::TXPACKAGES: return "txpackages";
-    case LogCategory::VALIDATION: return "validation";
-    case LogCategory::KERNEL: return "kernel";
-    case LogCategory::LOCK: return "lock";
-    } // no default case, so the compiler can warn about missing cases
-    return "unknown";
-}
 
 enum class ChainType : btck_ChainType {
     MAINNET = btck_ChainType_MAINNET,
@@ -224,11 +188,6 @@ T check(T ptr)
         throw std::runtime_error("failed to instantiate btck object");
     }
     return ptr;
-}
-
-inline std::string_view ToStringView(btck_StringView view)
-{
-    return {view.data, view.len};
 }
 
 template <typename Collection, typename ValueType, auto GetFunc>
@@ -569,50 +528,6 @@ public:
 };
 
 template <typename Derived>
-class WtxidApi
-{
-private:
-    auto impl() const
-    {
-        return static_cast<const Derived*>(this)->get();
-    }
-
-    friend Derived;
-    WtxidApi() = default;
-
-public:
-    bool operator==(const WtxidApi& other) const
-    {
-        return btck_wtxid_equals(impl(), other.impl()) != 0;
-    }
-
-    bool operator!=(const WtxidApi& other) const
-    {
-        return btck_wtxid_equals(impl(), other.impl()) == 0;
-    }
-
-    std::array<std::byte, 32> ToBytes() const
-    {
-        std::array<std::byte, 32> hash;
-        btck_wtxid_to_bytes(impl(), reinterpret_cast<unsigned char*>(hash.data()));
-        return hash;
-    }
-};
-
-class WtxidView : public View<btck_Wtxid>, public WtxidApi<WtxidView>
-{
-public:
-    explicit WtxidView(const btck_Wtxid* ptr) : View{ptr} {}
-};
-
-class Wtxid : public Handle<btck_Wtxid, btck_wtxid_copy, btck_wtxid_destroy>, public WtxidApi<Wtxid>
-{
-public:
-    Wtxid(const WtxidView& view)
-        : Handle(view) {}
-};
-
-template <typename Derived>
 class OutPointApi
 {
 private:
@@ -769,29 +684,14 @@ public:
         return TransactionInputView{btck_transaction_get_input_at(impl(), index)};
     }
 
-    uint32_t GetVersion() const
-    {
-        return btck_transaction_get_version(impl());
-    }
-
     uint32_t GetLocktime() const
     {
         return btck_transaction_get_locktime(impl());
     }
 
-    bool HasWitness() const
-    {
-        return btck_transaction_has_witness(impl()) != 0;
-    }
-
     TxidView Txid() const
     {
         return TxidView{btck_transaction_get_txid(impl())};
-    }
-
-    WtxidView Wtxid() const
-    {
-        return WtxidView{btck_transaction_get_wtxid(impl())};
     }
 
     MAKE_RANGE_METHOD(Outputs, Derived, &TransactionApi<Derived>::CountOutputs, &TransactionApi<Derived>::GetOutput, *static_cast<const Derived*>(this))
@@ -920,13 +820,6 @@ public:
         return BlockHashView{btck_block_header_get_prev_hash(impl())};
     }
 
-    std::array<std::byte, 32> MerkleRoot() const
-    {
-        std::array<std::byte, 32> merkle_root;
-        btck_block_header_get_merkle_root(impl(), reinterpret_cast<unsigned char*>(merkle_root.data()));
-        return merkle_root;
-    }
-
     uint32_t Timestamp() const
     {
         return btck_block_header_get_timestamp(impl());
@@ -1025,41 +918,34 @@ public:
     }
 };
 
-inline void logging_set_min_level(LogLevel level)
+inline void logging_disable()
 {
-    btck_logging_set_min_level(static_cast<btck_LogLevel>(level));
+    btck_logging_disable();
 }
 
-//! Non-owning view over a btck_LogEntry. The referenced entry is only valid for the duration of the
-//! logging callback, so a LogEntry (and any string_view obtained from it) must not be stored or
-//! used after the callback returns.
-class LogEntry : public View<btck_LogEntry>
+inline void logging_set_options(const btck_LoggingOptions& logging_options)
 {
-public:
-    explicit LogEntry(const btck_LogEntry* entry) : View{entry} {}
+    btck_logging_set_options(logging_options);
+}
 
-    std::string_view Message() const { return ToStringView(btck_log_entry_get_message(get())); }
-    std::string_view ThreadName() const { return ToStringView(btck_log_entry_get_thread_name(get())); }
-    std::chrono::sys_time<std::chrono::nanoseconds> Timestamp() const
-    {
-        return std::chrono::sys_time<std::chrono::nanoseconds>{std::chrono::nanoseconds{btck_log_entry_get_timestamp_ns(get())}};
-    }
-    std::optional<std::chrono::sys_seconds> MockTime() const
-    {
-        const int64_t mocktime_s{btck_log_entry_get_mocktime_s(get())};
-        if (mocktime_s == 0) return std::nullopt;
-        return std::chrono::sys_seconds{std::chrono::seconds{mocktime_s}};
-    }
-    std::string_view FileName() const { return ToStringView(btck_log_entry_get_file_name(get())); }
-    std::string_view FunctionName() const { return ToStringView(btck_log_entry_get_function_name(get())); }
-    uint32_t Line() const { return btck_log_entry_get_line(get()); }
-    LogLevel Level() const { return static_cast<LogLevel>(btck_log_entry_get_level(get())); }
-    LogCategory Category() const { return static_cast<LogCategory>(btck_log_entry_get_category(get())); }
-};
+inline void logging_set_level_category(LogCategory category, LogLevel level)
+{
+    btck_logging_set_level_category(static_cast<btck_LogCategory>(category), static_cast<btck_LogLevel>(level));
+}
+
+inline void logging_enable_category(LogCategory category)
+{
+    btck_logging_enable_category(static_cast<btck_LogCategory>(category));
+}
+
+inline void logging_disable_category(LogCategory category)
+{
+    btck_logging_disable_category(static_cast<btck_LogCategory>(category));
+}
 
 template <typename T>
-concept Log = requires(T a, const LogEntry& entry) {
-    { a.LogMessage(entry) } -> std::same_as<void>;
+concept Log = requires(T a, std::string_view message) {
+    { a.LogMessage(message) } -> std::same_as<void>;
 };
 
 template <Log T>
@@ -1068,7 +954,7 @@ class Logger : UniqueHandle<btck_LoggingConnection, btck_logging_connection_dest
 public:
     Logger(std::unique_ptr<T> log)
         : UniqueHandle{btck_logging_connection_create(
-              +[](void* user_data, const btck_LogEntry* entry) { static_cast<T*>(user_data)->LogMessage(LogEntry{entry}); },
+              +[](void* user_data, const char* message, size_t message_len) { static_cast<T*>(user_data)->LogMessage({message, message_len}); },
               log.release(),
               +[](void* user_data) { delete static_cast<T*>(user_data); })}
     {

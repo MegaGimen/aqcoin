@@ -66,14 +66,10 @@ def github_import_vs_env(_ci_type):
 def generate(ci_type):
     command = [
         "cmake",
-        "-E",
-        "env",
-        "CXXFLAGS=-Wno-error=return-type -Wno-error=conditional-uninitialized -Wno-error=unused-macros",
-        "cmake",
         "-B",
         "build",
         "-Werror=dev",
-        "--preset=windows",
+        "--preset=vs2026",
         # Using x64-windows-release for both host and target triplets
         # to ensure vcpkg builds only release packages, thereby optimizing
         # build time.
@@ -181,7 +177,6 @@ def run_tests(ci_type):
         for var, exe in test_envs.items():
             os.environ[var] = str(release_bin / exe)
 
-        os.environ["QT_ASSUME_STDERR_HAS_CONSOLE"] = "1"
         ctest_cmd = [
             "ctest",
             "--test-dir",

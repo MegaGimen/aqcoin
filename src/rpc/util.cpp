@@ -23,7 +23,6 @@
 #include <univalue.h>
 #include <util/bip32.h>
 #include <util/check.h>
-#include <util/expected.h>
 #include <util/result.h>
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -200,7 +199,7 @@ std::string HelpExampleCliNamed(const std::string& methodname, const RPCArgList&
                 : argpair.second.write();
         result += " " + argpair.first + "=" + ShellQuoteIfNeeded(value);
     }
-    result += '\n';
+    result += "\n";
     return result;
 }
 
@@ -473,7 +472,7 @@ struct Sections {
             } else {
                 left += push_name ? arg.ToStringObj(/*oneline=*/false) : arg.ToString(/*oneline=*/false);
             }
-            left += ',';
+            left += ",";
             PushSection({left, arg.ToDescriptionString(/*is_named_arg=*/push_name)});
             break;
         }
@@ -493,7 +492,7 @@ struct Sections {
         case RPCArg::Type::ARR: {
             auto left = indent;
             left += push_name ? "\"" + arg.GetName() + "\": " : "";
-            left += '[';
+            left += "[";
             const auto right = is_top_level_arg ? "" : arg.ToDescriptionString(/*is_named_arg=*/push_name);
             PushSection({left, right});
             for (const auto& arg_inner : arg.m_inner) {
@@ -519,7 +518,7 @@ struct Sections {
             CHECK_NONFATAL(s.m_left.find('\n') == std::string::npos);
             if (s.m_right.empty()) {
                 ret += s.m_left;
-                ret += '\n';
+                ret += "\n";
                 continue;
             }
 
@@ -544,7 +543,7 @@ struct Sections {
                 new_line_pos = s.m_right.find_first_of('\n', begin + 1);
             }
             ret += right;
-            ret += '\n';
+            ret += "\n";
         }
         return ret;
     }
@@ -787,7 +786,7 @@ std::string RPCMethod::ToString() const
     for (const auto& arg : m_args) {
         if (arg.m_opts.hidden) break; // Any arg that follows is also hidden
         const bool optional = arg.IsOptional();
-        ret += ' ';
+        ret += " ";
         if (optional) {
             if (!was_optional) ret += "( ";
             was_optional = true;
@@ -942,7 +941,7 @@ bool RPCArg::IsOptional() const
 std::string RPCArg::ToDescriptionString(bool is_named_arg) const
 {
     std::string ret;
-    ret += '(';
+    ret += "(";
     if (m_opts.type_str.size() != 0) {
         ret += m_opts.type_str.at(1);
     } else {
@@ -997,7 +996,7 @@ std::string RPCArg::ToDescriptionString(bool is_named_arg) const
         }
         } // no default case, so the compiler can warn about missing cases
     }
-    ret += ')';
+    ret += ")";
     if (m_type == Type::OBJ_NAMED_PARAMS) ret += " Options object that can be used to pass named arguments, listed below.";
     ret += m_description.empty() ? "" : " " + m_description;
     return ret;
@@ -1231,7 +1230,7 @@ void RPCResult::CheckInnerDoc() const
 std::string RPCArg::ToStringObj(const bool oneline) const
 {
     std::string res;
-    res += '\"';
+    res += "\"";
     res += GetFirstName();
     if (oneline) {
         res += "\":";
@@ -1252,7 +1251,7 @@ std::string RPCArg::ToStringObj(const bool oneline) const
     case Type::BOOL:
         return res + "bool";
     case Type::ARR:
-        res += '[';
+        res += "[";
         for (const auto& i : m_inner) {
             res += i.ToString(oneline) + ",";
         }
@@ -1320,6 +1319,7 @@ static std::pair<int64_t, int64_t> ParseRange(const UniValue& value)
     if (value.isArray() && value.size() == 2 && value[0].isNum() && value[1].isNum()) {
         int64_t low = value[0].getInt<int64_t>();
         int64_t high = value[1].getInt<int64_t>();
+        if (low > high) throw JSONRPCError(RPC_INVALID_PARAMETER, "Range specified as [begin,end] must not have begin after end");
         return {low, high};
     }
     throw JSONRPCError(RPC_INVALID_PARAMETER, "Range must be specified as end or as [begin,end]");
@@ -1329,8 +1329,14 @@ std::pair<int64_t, int64_t> ParseDescriptorRange(const UniValue& value)
 {
     int64_t low, high;
     std::tie(low, high) = ParseRange(value);
-    if (auto res = CheckDescriptorRangeBounds(low, high); !res) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, res.error());
+    if (low < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Range should be greater or equal than 0");
+    }
+    if ((high >> 31) != 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "End of range is too high");
+    }
+    if (high >= low + 1000000) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Range is too large");
     }
     return {low, high};
 }

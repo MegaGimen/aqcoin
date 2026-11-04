@@ -9,9 +9,7 @@
 #include <util/strencodings.h>
 #include <util/string.h>
 
-#include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <cstring>
 
 #include <limits>
@@ -39,31 +37,27 @@ static const int8_t mapBase58[256] = {
     -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
 };
 
-[[nodiscard]] static bool DecodeBase58Raw(std::string_view str, std::vector<unsigned char>& vch, int max_ret_len)
+[[nodiscard]] static bool DecodeBase58(const char* psz, std::vector<unsigned char>& vch, int max_ret_len)
 {
-    const char* psz = str.data();
-    const char* const end = str.data() + str.size();
     // Skip leading spaces.
-    while (psz != end && IsSpace(*psz))
+    while (*psz && IsSpace(*psz))
         psz++;
     // Skip and count leading '1's.
     int zeroes = 0;
     int length = 0;
-    while (psz != end && *psz == '1') {
+    while (*psz == '1') {
         zeroes++;
         if (zeroes > max_ret_len) return false;
         psz++;
     }
     // Allocate enough space in big-endian base256 representation.
-    const size_t size{static_cast<size_t>(std::min<uint64_t>(
-        uint64_t(end - psz) * 733 / 1000 + 1, // log(58) / log(256), rounded up.
-        uint64_t(std::max(max_ret_len - zeroes, 0)) + 1))};
+    int size = strlen(psz) * 733 /1000 + 1; // log(58) / log(256), rounded up.
     std::vector<unsigned char> b256(size);
     // Process the characters.
     static_assert(std::size(mapBase58) == 256, "mapBase58.size() should be 256"); // guarantee not out of range
-    while (psz != end && !IsSpace(*psz)) {
+    while (*psz && !IsSpace(*psz)) {
         // Decode base58 character
-        int carry{mapBase58[uint8_t(*psz)]};
+        int carry = mapBase58[(uint8_t)*psz];
         if (carry == -1)  // Invalid b58 character
             return false;
         int i = 0;
@@ -78,9 +72,9 @@ static const int8_t mapBase58[256] = {
         psz++;
     }
     // Skip trailing spaces.
-    while (psz != end && IsSpace(*psz))
+    while (IsSpace(*psz))
         psz++;
-    if (psz != end)
+    if (*psz != 0)
         return false;
     // Skip leading zeroes in b256.
     std::vector<unsigned char>::iterator it = b256.begin() + (size - length);
@@ -132,12 +126,12 @@ std::string EncodeBase58(std::span<const unsigned char> input)
     return str;
 }
 
-bool DecodeBase58(std::string_view str, std::vector<unsigned char>& vchRet, int max_ret_len)
+bool DecodeBase58(const std::string& str, std::vector<unsigned char>& vchRet, int max_ret_len)
 {
     if (ContainsNUL(str)) {
         return false;
     }
-    return DecodeBase58Raw(str, vchRet, max_ret_len);
+    return DecodeBase58(str.c_str(), vchRet, max_ret_len);
 }
 
 std::string EncodeBase58Check(std::span<const unsigned char> input)
@@ -149,9 +143,9 @@ std::string EncodeBase58Check(std::span<const unsigned char> input)
     return EncodeBase58(vch);
 }
 
-[[nodiscard]] static bool DecodeBase58CheckRaw(std::string_view str, std::vector<unsigned char>& vchRet, int max_ret_len)
+[[nodiscard]] static bool DecodeBase58Check(const char* psz, std::vector<unsigned char>& vchRet, int max_ret_len)
 {
-    if (!DecodeBase58Raw(str, vchRet, max_ret_len > std::numeric_limits<int>::max() - 4 ? std::numeric_limits<int>::max() : max_ret_len + 4) ||
+    if (!DecodeBase58(psz, vchRet, max_ret_len > std::numeric_limits<int>::max() - 4 ? std::numeric_limits<int>::max() : max_ret_len + 4) ||
         (vchRet.size() < 4)) {
         vchRet.clear();
         return false;
@@ -166,10 +160,10 @@ std::string EncodeBase58Check(std::span<const unsigned char> input)
     return true;
 }
 
-bool DecodeBase58Check(std::string_view str, std::vector<unsigned char>& vchRet, int max_ret)
+bool DecodeBase58Check(const std::string& str, std::vector<unsigned char>& vchRet, int max_ret)
 {
     if (ContainsNUL(str)) {
         return false;
     }
-    return DecodeBase58CheckRaw(str, vchRet, max_ret);
+    return DecodeBase58Check(str.c_str(), vchRet, max_ret);
 }

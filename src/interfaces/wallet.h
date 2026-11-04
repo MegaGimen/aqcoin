@@ -11,13 +11,10 @@
 #include <consensus/amount.h>
 #include <interfaces/chain.h>
 #include <primitives/transaction.h>
-#include <pubkey.h>
 #include <support/allocators/secure.h>
-#include <util/expected.h>
 #include <util/fs.h>
 #include <util/result.h>
 #include <util/ui_change_type.h>
-#include <wallet/types.h>
 
 #include <compare>
 #include <cstddef>
@@ -33,19 +30,19 @@
 #include <vector>
 
 class ArgsManager;
+class CKeyID;
+class CPubKey;
 class CScript;
 class PartiallySignedTransaction;
 class uint256;
 enum class FeeReason;
 enum class OutputType;
 struct bilingual_str;
-struct CExtKey;
-
 namespace wallet {
+struct CreatedTransactionResult;
 class CCoinControl;
 class CWallet;
-struct ImportDescriptorRequest;
-struct ImportResult;
+enum class AddressPurpose;
 struct CRecipient;
 struct WalletContext;
 } // namespace wallet
@@ -76,14 +73,14 @@ public:
     virtual bool lock() = 0;
 
     //! Unlock wallet.
-    virtual util::Expected<void, wallet::WalletError> unlock(const SecureString& wallet_passphrase) = 0;
+    virtual bool unlock(const SecureString& wallet_passphrase) = 0;
 
     //! Return whether wallet is locked.
     virtual bool isLocked() = 0;
 
     //! Change wallet passphrase.
-    virtual util::Expected<void, wallet::WalletError> changeWalletPassphrase(const SecureString& old_wallet_passphrase,
-                                                                             const SecureString& new_wallet_passphrase) = 0;
+    virtual bool changeWalletPassphrase(const SecureString& old_wallet_passphrase,
+        const SecureString& new_wallet_passphrase) = 0;
 
     //! Abort a rescan.
     virtual void abortRescan() = 0;
@@ -99,13 +96,6 @@ public:
 
     //! Get public key.
     virtual bool getPubKey(const CScript& script, const CKeyID& address, CPubKey& pub_key) = 0;
-
-    //! Generate and add a new HD key to the wallet.
-    //! Requires the wallet to be unlocked. Returns a `WalletError` with code
-    //! `WalletErrorCode::UnlockNeeded` if the wallet is locked.
-    //!
-    //! Return the master xpub for the added HD key, or a `WalletError` on failure.
-    virtual util::Expected<CExtPubKey, wallet::WalletError> addHDKey(const std::optional<CExtKey>& key) = 0;
 
     //! Sign message
     virtual SigningResult signMessage(const std::string& message, const PKHash& pkhash, std::string& str_sig) = 0;
@@ -212,9 +202,6 @@ public:
         PartiallySignedTransaction& psbtx,
         bool& complete) = 0;
 
-    //! Import descriptors
-    virtual std::vector<wallet::ImportResult> importDescriptors(std::vector<wallet::ImportDescriptorRequest>& requests) = 0;
-
     //! Get balances.
     virtual WalletBalances getBalances() = 0;
 
@@ -278,7 +265,7 @@ public:
     virtual OutputType getDefaultAddressType() = 0;
 
     //! Get max tx fee.
-    virtual CAmount getMaxTxFee() = 0;
+    virtual CAmount getDefaultMaxTxFee() = 0;
 
     // Remove wallet.
     virtual void remove() = 0;
@@ -406,8 +393,6 @@ struct WalletTx
     std::optional<std::string> message; // Deprecated
     std::optional<std::string> comment;
     std::optional<std::string> comment_to;
-    std::optional<Txid> replaces_txid;
-    std::optional<Txid> replaced_by_txid;
     bool is_coinbase;
 
     bool operator<(const WalletTx& a) const { return tx->GetHash() < a.tx->GetHash(); }

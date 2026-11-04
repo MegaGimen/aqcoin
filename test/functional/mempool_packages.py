@@ -6,7 +6,7 @@
 
 from decimal import Decimal
 
-from test_framework.mempool_util import (
+from test_framework.messages import (
     DEFAULT_CLUSTER_LIMIT,
 )
 from test_framework.p2p import P2PTxInvStore
@@ -24,7 +24,8 @@ assert CUSTOM_CLUSTER_LIMIT < DEFAULT_CLUSTER_LIMIT
 class MempoolPackagesTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.noban_tx_relay = True  # faster tx relay
+        # whitelist peers to speed up tx relay / mempool sync
+        self.noban_tx_relay = True
         self.extra_args = [
             [
             ],

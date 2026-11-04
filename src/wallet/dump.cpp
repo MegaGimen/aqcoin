@@ -5,9 +5,7 @@
 #include <wallet/dump.h>
 
 #include <common/args.h>
-#include <streams.h>
 #include <util/fs.h>
-#include <util/fs_helpers.h>
 #include <util/translation.h>
 #include <wallet/wallet.h>
 #include <wallet/walletdb.h>
@@ -38,8 +36,9 @@ bool DumpWallet(const ArgsManager& args, WalletDatabase& db, bilingual_str& erro
         error = strprintf(_("File %s already exists. If you are sure this is what you want, move it out of the way first."), fs::PathToString(path));
         return false;
     }
-    AutoFile dump_file{fsbridge::fopen(path, "w")};
-    if (dump_file.IsNull()) {
+    std::ofstream dump_file;
+    dump_file.open(path.std_path());
+    if (dump_file.fail()) {
         error = strprintf(_("Unable to open %s for writing"), fs::PathToString(path));
         return false;
     }
@@ -48,46 +47,30 @@ bool DumpWallet(const ArgsManager& args, WalletDatabase& db, bilingual_str& erro
 
     std::unique_ptr<DatabaseBatch> batch = db.MakeBatch();
 
-    struct DumpWalletError {
-        bilingual_str message;
-    };
-    auto throw_error = [](bilingual_str message) {
-        throw DumpWalletError{std::move(message)};
-    };
-    auto throw_write_error = [&] {
-        throw_error(strprintf(_("Unable to write complete dump file %s."), fs::PathToString(path)));
-    };
-    auto write = [&](const std::string& line) {
-        try {
-            dump_file.write(MakeByteSpan(line));
-        } catch (const std::ios_base::failure&) {
-            throw_write_error();
-        }
-    };
-    auto write_record = [&](const std::string& line) {
-        write(line);
-        hasher << std::span{line};
-    };
+    bool ret = true;
+    std::unique_ptr<DatabaseCursor> cursor = batch->GetNewCursor();
+    if (!cursor) {
+        error = _("Error: Couldn't create cursor into database");
+        ret = false;
+    }
 
-    try {
-        std::unique_ptr<DatabaseCursor> cursor = batch->GetNewCursor();
-        if (!cursor) {
-            throw_error(_("Error: Couldn't create cursor into database"));
-        }
+    // Write out a magic string with version
+    std::string line = strprintf("%s,%u\n", DUMP_MAGIC, DUMP_VERSION);
+    dump_file.write(line.data(), line.size());
+    hasher << std::span{line};
 
-        // Write out a magic string with version
-        std::string line = strprintf("%s,%u\n", DUMP_MAGIC, DUMP_VERSION);
-        write_record(line);
+    // Write out the file format
+    std::string format = db.Format();
+    // BDB files that are opened using BerkeleyRODatabase have its format as "bdb_ro"
+    // We want to override that format back to "bdb"
+    if (format == "bdb_ro") {
+        format = "bdb";
+    }
+    line = strprintf("%s,%s\n", "format", format);
+    dump_file.write(line.data(), line.size());
+    hasher << std::span{line};
 
-        // Write out the file format
-        std::string format = db.Format();
-        // BDB files that are opened using BerkeleyRODatabase have its format as "bdb_ro"
-        // We want to override that format back to "bdb"
-        if (format == "bdb_ro") {
-            format = "bdb";
-        }
-        line = strprintf("%s,%s\n", "format", format);
-        write_record(line);
+    if (ret) {
 
         // Read the records
         while (true) {
@@ -95,31 +78,35 @@ bool DumpWallet(const ArgsManager& args, WalletDatabase& db, bilingual_str& erro
             DataStream ss_value{};
             DatabaseCursor::Status status = cursor->Next(ss_key, ss_value);
             if (status == DatabaseCursor::Status::DONE) {
+                ret = true;
                 break;
             } else if (status == DatabaseCursor::Status::FAIL) {
-                throw_error(_("Error reading next record from wallet database"));
+                error = _("Error reading next record from wallet database");
+                ret = false;
+                break;
             }
             std::string key_str = HexStr(ss_key);
             std::string value_str = HexStr(ss_value);
             line = strprintf("%s,%s\n", key_str, value_str);
-            write_record(line);
+            dump_file.write(line.data(), line.size());
+            hasher << std::span{line};
         }
-
-        // Write the hash
-        line = strprintf("checksum,%s\n", HexStr(hasher.GetHash()));
-        write(line);
-        if (!dump_file.Commit()) throw_write_error();
-        if (dump_file.fclose() != 0) throw_write_error();
-        DirectoryCommit(path.parent_path());
-    } catch (const DumpWalletError& e) {
-        error = e.message;
-        // Remove the dumpfile on failure
-        (void)dump_file.fclose();
-        fs::remove(path);
-        return false;
     }
 
-    return true;
+    cursor.reset();
+    batch.reset();
+
+    if (ret) {
+        // Write the hash
+        tfm::format(dump_file, "checksum,%s\n", HexStr(hasher.GetHash()));
+        dump_file.close();
+    } else {
+        // Remove the dumpfile on failure
+        dump_file.close();
+        fs::remove(path);
+    }
+
+    return ret;
 }
 
 // The standard wallet deleter function blocks on the validation interface
@@ -127,7 +114,7 @@ bool DumpWallet(const ArgsManager& args, WalletDatabase& db, bilingual_str& erro
 // deleter here.
 static void WalletToolReleaseWallet(CWallet* wallet)
 {
-    wallet->WalletLogPrintf("Releasing wallet");
+    wallet->WalletLogPrintf("Releasing wallet\n");
     wallet->Close();
     delete wallet;
 }

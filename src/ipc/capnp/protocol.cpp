@@ -19,7 +19,6 @@
 #include <cassert>
 #include <cerrno>
 #include <future>
-#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -84,13 +83,13 @@ public:
         startLoop();
         return mp::ConnectStream<messages::Init>(*m_loop, std::move(stream));
     }
-    void listen(mp::SocketId listen_fd, interfaces::Init& init, std::optional<size_t> max_connections) override
+    void listen(mp::SocketId listen_fd, interfaces::Init& init) override
     {
         startLoop();
         if (::listen(listen_fd, /*backlog=*/5) != 0) {
             throw std::system_error(errno, std::system_category());
         }
-        mp::ListenConnections<messages::Init>(*m_loop, listen_fd, init, max_connections);
+        mp::ListenConnections<messages::Init>(*m_loop, listen_fd, init);
     }
     void serve(interfaces::Init& init, const std::function<mp::Stream()>& make_stream) override
     {
@@ -113,7 +112,7 @@ public:
         // process (if there is one), since a parent process should be able to
         // monitor and control this process, even during shutdown.
         m_loop->sync([&] {
-            std::erase_if(m_loop->m_incoming_connections, [this](mp::Connection& c) { return &c != m_parent_connection; });
+            m_loop->m_incoming_connections.remove_if([this](mp::Connection& c) { return &c != m_parent_connection; });
         });
     }
     mp::Stream makeStream(mp::SocketId socket) override

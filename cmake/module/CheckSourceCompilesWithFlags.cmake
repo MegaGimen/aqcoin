@@ -3,11 +3,9 @@
 # file COPYING or https://opensource.org/license/mit/.
 
 include_guard(GLOBAL)
-include(CheckCXXSourceCompiles)
-include(TryAppendCXXFlags)
 
 #[=[
-Check once if C++ source code can be compiled with no diagnostics.
+Check once if C++ source code can be compiled.
 
 Options:
 
@@ -27,10 +25,10 @@ The `check_cxx_source_compiles_with_flags()` function handles this case and acce
 #]=]
 function(check_cxx_source_compiles_with_flags source result_var)
   cmake_parse_arguments(PARSE_ARGV 2 _ "" "" "CXXFLAGS;LDFLAGS;LINK_LIBRARIES")
-  list(APPEND __CXXFLAGS ${working_compiler_werror_flag})
   list(JOIN __CXXFLAGS " " CMAKE_REQUIRED_FLAGS)
   set(CMAKE_REQUIRED_LINK_OPTIONS ${__LDFLAGS})
   set(CMAKE_REQUIRED_LIBRARIES ${__LINK_LIBRARIES})
+  include(CheckCXXSourceCompiles)
   check_cxx_source_compiles("${source}" ${result_var})
   set(${result_var} ${${result_var}} PARENT_SCOPE)
 endfunction()

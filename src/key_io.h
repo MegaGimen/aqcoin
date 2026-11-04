@@ -12,21 +12,14 @@
 #include <pubkey.h>
 
 #include <string>
-#include <string_view>
-#include <utility>
 
-CKey DecodeSecret(std::string_view str);
+CKey DecodeSecret(const std::string& str);
 std::string EncodeSecret(const CKey& key);
 
-CExtKey DecodeExtKey(std::string_view str);
+CExtKey DecodeExtKey(const std::string& str);
 std::string EncodeExtKey(const CExtKey& extkey);
-CExtPubKey DecodeExtPubKey(std::string_view str);
+CExtPubKey DecodeExtPubKey(const std::string& str);
 std::string EncodeExtPubKey(const CExtPubKey& extpubkey);
-
-/** Decode a base58-encoded extended key string as either an xprv or xpub, using a single
- *  base58 decode. The first element of the returned pair is valid if the string encodes
- *  an extended private key; the second if it encodes an extended public key. */
-std::pair<CExtKey, CExtPubKey> DecodeExtKeyOrPubKey(std::string_view str);
 
 std::string EncodeDestination(const CTxDestination& dest);
 CTxDestination DecodeDestination(const std::string& str);

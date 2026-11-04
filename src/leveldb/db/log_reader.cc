@@ -170,6 +170,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
       }
     }
   }
+  return false;
 }
 
 uint64_t Reader::LastRecordOffset() { return last_record_offset_; }
