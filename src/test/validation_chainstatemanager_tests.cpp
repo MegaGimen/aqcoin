@@ -208,7 +208,10 @@ BOOST_FIXTURE_TEST_CASE(chainstatemanager_ibd_exit_after_loading_blocks, ChainTe
                 for (const bool enough_work : {false, true}) {
                     for (const bool tip_recent : {false, true}) {
                         apply(cached_is_ibd, loading_blocks, tip_exists, enough_work, tip_recent);
-                        const bool expected_ibd = cached_is_ibd && (loading_blocks || !tip_exists || !enough_work || !tip_recent);
+                        // AQCoin's minimum chain work is 0, so "MinimumChainWork() - 1"
+                        // wraps around and the tip always has enough work.
+                        const bool has_enough_work{enough_work || chainman.MinimumChainWork() == 0};
+                        const bool expected_ibd = cached_is_ibd && (loading_blocks || !tip_exists || !has_enough_work || !tip_recent);
                         BOOST_CHECK_EQUAL(chainman.IsInitialBlockDownload(), expected_ibd);
                     }
                 }

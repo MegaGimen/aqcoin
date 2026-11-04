@@ -61,7 +61,12 @@ namespace miner_tests {
 // hardcoded nonces for difficulty 1; mainnet's x_init = 700 needs ~2e9 hashes
 // per block, so BLOCKINFO nonces are not meaningful here.
 struct MinerTestingSetup : public TestingSetup {
-    MinerTestingSetup() : TestingSetup{ChainType::REGTEST} {}
+    // Keep the soft forks inactive at the low heights used here, as they were
+    // on Bitcoin mainnet where these tests were written.
+    MinerTestingSetup() : TestingSetup{ChainType::REGTEST, {.extra_args = {
+        "-testactivationheight=bip34@100000", "-testactivationheight=dersig@100000",
+        "-testactivationheight=cltv@100000", "-testactivationheight=csv@100000",
+        "-testactivationheight=segwit@100000"}}} {}
     void TestPackageSelection(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestBasicMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst, int baseheight) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
     void TestPrioritisedMining(const CScript& scriptPubKey, const std::vector<CTransactionRef>& txFirst) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
@@ -911,6 +916,8 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             txCoinbase.version = 1;
             txCoinbase.vin[0].scriptSig = CScript{} << (current_height + 1) << bi.extranonce;
             txCoinbase.vout.resize(1); // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
+            // Without the commitment output the coinbase must not carry a witness.
+            txCoinbase.vin[0].scriptWitness.SetNull();
             txCoinbase.vout[0].scriptPubKey = CScript();
             block.vtx[0] = MakeTransactionRef(txCoinbase);
             if (txFirst.size() == 0)
@@ -937,7 +944,8 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
         } else {
             reason = "stale reason";
             debug = "stale debug";
-            BOOST_REQUIRE(block_template->submitSolution(block.nVersion, block.nTime, block.nNonce, MakeTransactionRef(txCoinbase), reason, debug));
+            const bool solution_ok{block_template->submitSolution(block.nVersion, block.nTime, block.nNonce, MakeTransactionRef(txCoinbase), reason, debug)};
+            BOOST_REQUIRE_MESSAGE(solution_ok, reason + " / " + debug);
             BOOST_REQUIRE_EQUAL(reason, "");
             BOOST_REQUIRE_EQUAL(debug, "");
             BOOST_CHECK_THROW(block_template->submitSolutionOld7(block.nVersion, block.nTime, block.nNonce,

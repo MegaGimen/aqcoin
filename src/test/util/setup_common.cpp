@@ -427,7 +427,7 @@ TestChain100Setup::TestChain100Setup(
     {
         LOCK(::cs_main);
         const std::string tip{m_node.chainman->ActiveChain().Tip()->GetBlockHash().ToString()};
-        if (tip != "TIP100") {
+        if (tip != "a36b2b420e4db6b59324f4556003f03e559f05a0c40a3610c00f09fd411273cc") {
             fprintf(stderr, "TestChain100Setup: unexpected tip %s\n", tip.c_str());
             assert(false);
         }

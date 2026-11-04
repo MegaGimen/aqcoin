@@ -7,6 +7,8 @@
 
 #include <key.h>
 #include <key_io.h>
+#include <chainparams.h>
+#include <random.h>
 #include <script/script.h>
 #include <test/util/json.h>
 #include <test/util/setup_common.h>
@@ -145,6 +147,36 @@ BOOST_AUTO_TEST_CASE(key_io_invalid)
             BOOST_CHECK_MESSAGE(!privkey.IsValid(), "IsValid privkey in mainnet:" + strTest);
         }
     }
+}
+
+// Mainnet P2SH addresses start with 'a' and the mainnet bech32 HRP is "aq":
+// Base58 addresses starting with "aq"/"aQ" must still decode as Base58.
+BOOST_AUTO_TEST_CASE(key_io_base58_hrp_prefix)
+{
+    SelectParams(ChainType::MAIN);
+    const CTxDestination p2sh{ScriptHash{}};
+    const std::string addr{EncodeDestination(p2sh)};
+    BOOST_CHECK_EQUAL(addr, "aQ44j1juvyTisyaC2peTFQbJEsPJ6xNJsd");
+    BOOST_CHECK(DecodeDestination(addr) == p2sh);
+    BOOST_CHECK(IsValidDestinationString(addr));
+    // Many random P2SH and P2PKH addresses round-trip.
+    FastRandomContext rng{uint256{7}};
+    int hrp_like{0};
+    for (int i = 0; i < 2000; ++i) {
+        uint160 h;
+        const auto bytes{rng.randbytes<20, unsigned char>()};
+        std::copy(bytes.begin(), bytes.end(), h.begin());
+        for (const CTxDestination& dest : {CTxDestination{ScriptHash{h}}, CTxDestination{PKHash{h}}}) {
+            const std::string a{EncodeDestination(dest)};
+            hrp_like += ToLower(a.substr(0, 2)) == "aq";
+            BOOST_CHECK_MESSAGE(DecodeDestination(a) == dest, a);
+        }
+    }
+    BOOST_CHECK(hrp_like > 0);
+    // Bech32 addresses still decode.
+    const CTxDestination wpkh{WitnessV0KeyHash{uint160{}}};
+    BOOST_CHECK(DecodeDestination(EncodeDestination(wpkh)) == wpkh);
+    BOOST_CHECK(EncodeDestination(wpkh).starts_with("aq1"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
